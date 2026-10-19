@@ -32,7 +32,27 @@ docker compose version
    mkdir -p ~/qiqicraft && cd ~/qiqicraft
    ```
 
-2. **创建 `docker-compose.yml`**：
+2. **配置环境变量 `.env`**：
+   创建 `.env` 文件并填入家长管理密码和 OpenAI 视觉模型配置：
+   ```bash
+   cat << 'EOF' > .env
+   # 服务端口
+   PORT=3001
+
+   # 家长管理面板密码（默认 1234，可自行修改）
+   PARENT_PIN=1234
+
+   # 小朋友的冒险昵称
+   CHILD_NAME=小矿工奇奇
+
+   # OpenAI / AI 视觉模型配置（支持中转代理和各种兼容 OpenAI 格式的模型）
+   OPENAI_API_KEY=sk-your-openai-api-key-here
+   OPENAI_BASE_URL=https://api.openai.com/v1
+   OPENAI_MODEL=gpt-4o
+   EOF
+   ```
+
+3. **创建 `docker-compose.yml`**：
    ```yaml
    version: '3.8'
 
@@ -43,22 +63,19 @@ docker compose version
        restart: unless-stopped
        ports:
          - "3001:3001"
-       environment:
-         - PORT=3001
-         # 可选：如果希望预设 OpenAI Key，也可直接在此填写；或启动后在 Web 端右上角「家长设置」填入
-         # - OPENAI_API_KEY=sk-xxxx
-         # - OPENAI_BASE_URL=https://api.openai.com/v1
-         # - OPENAI_MODEL=gpt-4o
+       env_file:
+         - .env
        volumes:
          - ./data:/app/data
+         - ./.env:/app/.env
    ```
 
-3. **创建数据持久化目录**：
+4. **创建数据持久化目录**：
    ```bash
    mkdir -p data/uploads
    ```
 
-4. **启动容器**：
+5. **启动容器**：
    ```bash
    docker compose up -d
    ```
@@ -73,7 +90,14 @@ docker compose version
    cd QiqiCraft
    ```
 
-2. **启动并自动构建**：
+2. **配置环境变量**：
+   ```bash
+   cp .env.example .env
+   # 使用 nano 或 vim 编辑 .env 填写你的 OpenAI API Key 和家长密码 PARENT_PIN
+   nano .env
+   ```
+
+3. **启动并自动构建**：
    ```bash
    docker compose up -d --build
    ```
@@ -93,22 +117,22 @@ docker compose version
    - 用 iPad Safari 浏览器打开：`http://192.168.1.100:3001`
    - 点击 Safari 顶部的 **「分享」图标 →「添加到主屏幕」**，即可拥有全屏沉浸式的《我的世界》作业应用！
 
-3. **初次使用配置**：
-   - 打开应用后，点击右上角的 **「家长设置」**（默认密码：`1234`）。
-   - 填入你的 OpenAI API Key、Base URL 及模型名称（如 `gpt-4o`），点击保存即可。
+3. **管理与配置**：
+   - **方式 A（推荐）**：直接在 Linux 主机的 `.env` 文件中配置 `PARENT_PIN`、`OPENAI_API_KEY`、`OPENAI_BASE_URL` 等。
+   - **方式 B**：在应用右上角点击 **「家长设置」**（默认密码为 `.env` 中设置的 `PARENT_PIN`，初始为 `1234`），在图形界面中修改，系统会自动双向写回 `.env` 文件持久保存。
 
 ---
 
 ## 💾 数据备份与持久化
 
-所有数据均保存在映射的 `./data` 目录下：
+所有数据均保存在映射的 `./data` 目录与 `./.env` 中：
+- `./.env`：家长管理 PIN 码与 OpenAI 模型配置。
 - `./data/state.json`：小朋友的方块背包、世界建造进度、宠物与等级。
-- `./data/settings.json`：家长设置与 OpenAI 配置。
 - `./data/uploads/`：作业打卡拍摄的照片原图。
 
-**备份只需备份该目录**：
+**备份数据**：
 ```bash
-tar -czvf qiqicraft_backup_$(date +%F).tar.gz data/
+tar -czvf qiqicraft_backup_$(date +%F).tar.gz data/ .env
 ```
 
 ---

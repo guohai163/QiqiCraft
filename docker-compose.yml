@@ -10,12 +10,19 @@ services:
     restart: unless-stopped
     ports:
       - "3001:3001"
+    # 自动加载根目录的 .env 文件配置（包括 PARENT_PIN、OPENAI_API_KEY 等）
+    env_file:
+      - .env
     environment:
       - PORT=3001
-      # 可选：如果不在 Web 端输入，也可以在此预设环境变量
-      # - OPENAI_API_KEY=your-api-key
+      # 也可直接在此处显式覆盖环境变量：
+      # - PARENT_PIN=1234
+      # - OPENAI_API_KEY=sk-xxxx
       # - OPENAI_BASE_URL=https://api.openai.com/v1
       # - OPENAI_MODEL=gpt-4o
+      # - CHILD_NAME=小矿工奇奇
     volumes:
-      # 持久化存储小朋友的作业照片、存档数据与家长配置
+      # 持久化存储小朋友的作业照片、存档数据与离线配置
       - ./data:/app/data
+      # 挂载 .env 文件以便在容器内外双向读写同步
+      - ./.env:/app/.env

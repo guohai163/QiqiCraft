@@ -31,6 +31,7 @@ export const ParentModal: React.FC<ParentModalProps> = ({
   const [baseUrl, setBaseUrl] = useState(settings.openaiBaseUrl || 'https://api.openai.com/v1');
   const [modelName, setModelName] = useState(settings.openaiModel || 'gpt-4o');
   const [childName, setChildName] = useState(settings.childName || state.childName);
+  const [parentPin, setParentPin] = useState(settings.parentPin || '1234');
   const [saveSuccess, setSaveSuccess] = useState('');
 
   // New Task Form
@@ -51,7 +52,7 @@ export const ParentModal: React.FC<ParentModalProps> = ({
       setPinError('');
       sound.playClick();
     } else {
-      setPinError('密码不对哦（默认家长密码：1234）');
+      setPinError('密码不对哦（可检查根目录 .env 文件中的 PARENT_PIN，默认：1234）');
     }
   };
 
@@ -62,9 +63,10 @@ export const ParentModal: React.FC<ParentModalProps> = ({
       openaiBaseUrl: baseUrl.trim(),
       openaiModel: modelName.trim(),
       childName: childName.trim(),
+      parentPin: parentPin.trim(),
     });
     setApiKey('');
-    setSaveSuccess('✅ 配置已保存并生效！');
+    setSaveSuccess('✅ 配置已保存并自动同步写入 .env 配置文件！');
     setTimeout(() => setSaveSuccess(''), 2500);
   };
 
@@ -218,26 +220,49 @@ export const ParentModal: React.FC<ParentModalProps> = ({
               </div>
             )}
 
-            {/* Tab 1: OpenAI Settings */}
+            {/* Tab 1: OpenAI & Environment Settings */}
             {activeTab === 'ai' && (
               <form onSubmit={handleSaveConfig} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-zinc-300 mb-1">
-                    👦 小朋友昵称（显示在主界面和村长表扬中）：
-                  </label>
-                  <input
-                    type="text"
-                    value={childName}
-                    onChange={(e) => setChildName(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl bg-black border border-zinc-700 text-white text-sm"
-                  />
+                {/* .env File Banner Notice */}
+                <div className="p-3.5 rounded-xl bg-blue-950/60 border border-blue-400/40 text-xs text-blue-200 leading-relaxed">
+                  <div className="font-bold flex items-center gap-1.5 text-blue-300 mb-1">
+                    <span>📁 集中环境变量配置模式（.env / Docker）</span>
+                  </div>
+                  家长密码与 OpenAI 密钥已改为由项目根目录的 <code className="px-1 py-0.5 rounded bg-black/60 font-mono text-amber-300">.env</code> 配置文件集中管理。你可以在下方直接修改并保存（会自动写入 <code className="font-mono text-amber-300">.env</code>），也可以直接在 Linux 终端通过 vim/nano 修改根目录的 <code className="font-mono text-amber-300">.env</code> 文件。
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-300 mb-1">
+                      👦 小朋友昵称 (CHILD_NAME)：
+                    </label>
+                    <input
+                      type="text"
+                      value={childName}
+                      onChange={(e) => setChildName(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl bg-black border border-zinc-700 text-white text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-amber-300 mb-1">
+                      🔐 家长控制台密码 (PARENT_PIN)：
+                    </label>
+                    <input
+                      type="text"
+                      value={parentPin}
+                      onChange={(e) => setParentPin(e.target.value)}
+                      placeholder="默认 1234"
+                      className="w-full px-3.5 py-2 rounded-xl bg-black border border-zinc-700 text-amber-300 font-mono text-sm"
+                    />
+                  </div>
                 </div>
 
                 <div className="p-4 rounded-xl bg-zinc-800/70 border border-zinc-700 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-black text-amber-300 flex items-center gap-1.5">
                       <Key className="w-4 h-4" />
-                      <span>OpenAI Vision 视觉模型配置</span>
+                      <span>OpenAI Vision 视觉模型配置 (.env)</span>
                     </span>
                     <span className="text-xs px-2 py-0.5 rounded bg-black text-emerald-400 font-bold">
                       {settings.hasApiKey
@@ -248,13 +273,13 @@ export const ParentModal: React.FC<ParentModalProps> = ({
 
                   <div>
                     <label className="block text-xs text-zinc-400 mb-1">
-                      OpenAI API Key（留空则保持原 Key 不变）：
+                      OpenAI API Key (OPENAI_API_KEY，留空则保持原配置)：
                     </label>
                     <input
                       type="password"
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}
-                      placeholder="sk-..."
+                      placeholder={settings.hasApiKey ? `已设置 (${settings.openaiApiKeyMasked})，输入可覆盖` : 'sk-...'}
                       className="w-full px-3.5 py-2 rounded-xl bg-black border border-zinc-700 text-white text-sm font-mono"
                     />
                   </div>
@@ -262,7 +287,7 @@ export const ParentModal: React.FC<ParentModalProps> = ({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs text-zinc-400 mb-1">
-                        API Base URL（支持官方或国内中转接口）：
+                        API Base URL (OPENAI_BASE_URL)：
                       </label>
                       <input
                         type="text"
@@ -274,7 +299,7 @@ export const ParentModal: React.FC<ParentModalProps> = ({
                     </div>
                     <div>
                       <label className="block text-xs text-zinc-400 mb-1">
-                        视觉模型名称（推荐 gpt-4o 或 gpt-4o-mini）：
+                        视觉模型名称 (OPENAI_MODEL)：
                       </label>
                       <input
                         type="text"
@@ -289,9 +314,9 @@ export const ParentModal: React.FC<ParentModalProps> = ({
 
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-lime-500 hover:bg-lime-400 text-zinc-950 font-black text-sm"
+                  className="px-6 py-2.5 rounded-xl bg-lime-500 hover:bg-lime-400 text-zinc-950 font-black text-sm flex items-center gap-2"
                 >
-                  💾 保存配置
+                  <span>💾 保存并同步写入 .env</span>
                 </button>
               </form>
             )}

@@ -34,6 +34,8 @@ if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
 app.use('/uploads', express.static(UPLOADS_DIR));
 
+const ENV_FILE = path.resolve(process.cwd(), '.env');
+
 interface ServerSettings {
   openaiApiKey: string;
   openaiBaseUrl: string;
@@ -44,30 +46,57 @@ interface ServerSettings {
   soundEnabled: boolean;
 }
 
-function getDefaultSettings(): ServerSettings {
-  return {
-    openaiApiKey: process.env.OPENAI_API_KEY || '',
-    openaiBaseUrl: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
-    openaiModel: process.env.OPENAI_MODEL || 'gpt-4o',
-    childName: '小矿工奇奇',
-    parentPin: '1234',
-    voiceEnabled: true,
-    soundEnabled: true,
-  };
+function writeEnvConfig(updates: Record<string, string>) {
+  try {
+    let content = '';
+    if (fs.existsSync(ENV_FILE)) {
+      content = fs.readFileSync(ENV_FILE, 'utf-8');
+    } else if (fs.existsSync(path.resolve(process.cwd(), '.env.example'))) {
+      content = fs.readFileSync(path.resolve(process.cwd(), '.env.example'), 'utf-8');
+    }
+
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === undefined) continue;
+      process.env[key] = value;
+      const regex = new RegExp(`^${key}=.*$`, 'm');
+      if (regex.test(content)) {
+        content = content.replace(regex, `${key}=${value}`);
+      } else {
+        content += `\n${key}=${value}`;
+      }
+    }
+
+    fs.writeFileSync(ENV_FILE, content.trim() + '\n');
+  } catch (err) {
+    console.error('Failed to write .env file:', err);
+  }
 }
 
 function loadSettings(): ServerSettings {
+  if (fs.existsSync(ENV_FILE)) {
+    dotenv.config({ path: ENV_FILE, override: true });
+  } else {
+    dotenv.config();
+  }
+
+  let localOverrides: Partial<ServerSettings> = {};
   try {
     if (fs.existsSync(SETTINGS_FILE)) {
-      const raw = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8'));
-      return { ...getDefaultSettings(), ...raw };
+      localOverrides = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8'));
     }
   } catch (e) {
-    console.error('Failed to load settings:', e);
+    console.error('Failed to load settings file:', e);
   }
-  const defaults = getDefaultSettings();
-  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(defaults, null, 2));
-  return defaults;
+
+  return {
+    openaiApiKey: process.env.OPENAI_API_KEY || localOverrides.openaiApiKey || '',
+    openaiBaseUrl: process.env.OPENAI_BASE_URL || localOverrides.openaiBaseUrl || 'https://api.openai.com/v1',
+    openaiModel: process.env.OPENAI_MODEL || localOverrides.openaiModel || 'gpt-4o',
+    parentPin: process.env.PARENT_PIN || localOverrides.parentPin || '1234',
+    childName: process.env.CHILD_NAME || localOverrides.childName || '小矿工奇奇',
+    voiceEnabled: localOverrides.voiceEnabled !== undefined ? localOverrides.voiceEnabled : true,
+    soundEnabled: localOverrides.soundEnabled !== undefined ? localOverrides.soundEnabled : true,
+  };
 }
 
 function saveSettings(settings: ServerSettings) {
@@ -202,20 +231,30 @@ app.post('/api/settings', (req, res) => {
   const current = loadSettings();
   const { openaiApiKey, openaiBaseUrl, openaiModel, childName, parentPin, voiceEnabled, soundEnabled } = req.body;
 
-  const updated: ServerSettings = {
-    ...current,
-    openaiBaseUrl: openaiBaseUrl !== undefined ? openaiBaseUrl.trim() : current.openaiBaseUrl,
-    openaiModel: openaiModel !== undefined ? openaiModel.trim() : current.openaiModel,
-    childName: childName !== undefined ? childName.trim() : current.childName,
-    parentPin: parentPin !== undefined ? parentPin.trim() : current.parentPin,
-    voiceEnabled: voiceEnabled !== undefined ? Boolean(voiceEnabled) : current.voiceEnabled,
-    soundEnabled: soundEnabled !== undefined ? Boolean(soundEnabled) : current.soundEnabled,
-  };
-
+  const envUpdates: Record<string, string> = {};
   if (typeof openaiApiKey === 'string' && openaiApiKey.trim() !== '') {
-    updated.openaiApiKey = openaiApiKey.trim();
+    envUpdates.OPENAI_API_KEY = openaiApiKey.trim();
+  }
+  if (openaiBaseUrl !== undefined && openaiBaseUrl.trim() !== '') {
+    envUpdates.OPENAI_BASE_URL = openaiBaseUrl.trim();
+  }
+  if (openaiModel !== undefined && openaiModel.trim() !== '') {
+    envUpdates.OPENAI_MODEL = openaiModel.trim();
+  }
+  if (parentPin !== undefined && parentPin.trim() !== '') {
+    envUpdates.PARENT_PIN = parentPin.trim();
+  }
+  if (childName !== undefined && childName.trim() !== '') {
+    envUpdates.CHILD_NAME = childName.trim();
   }
 
+  if (Object.keys(envUpdates).length > 0) {
+    writeEnvConfig(envUpdates);
+  }
+
+  const updated = loadSettings();
+  if (voiceEnabled !== undefined) updated.voiceEnabled = Boolean(voiceEnabled);
+  if (soundEnabled !== undefined) updated.soundEnabled = Boolean(soundEnabled);
   saveSettings(updated);
 
   if (childName) {
