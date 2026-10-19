@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  qiqicraft:
+    image: ghcr.io/guohai163/qiqicraft:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: qiqicraft
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      # 可选：如果不在 Web 端输入，也可以在此预设环境变量
+      # - OPENAI_API_KEY=your-api-key
+      # - OPENAI_BASE_URL=https://api.openai.com/v1
+      # - OPENAI_MODEL=gpt-4o
+    volumes:
+      # 持久化存储小朋友的作业照片、存档数据与家长配置
+      - ./data:/app/data
