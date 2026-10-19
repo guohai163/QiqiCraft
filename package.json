@@ -20,7 +20,8 @@
     "openai": "^4.70.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "three": "^0.170.0"
+    "three": "^0.170.0",
+    "tsx": "^4.19.2"
   },
   "devDependencies": {
     "@types/canvas-confetti": "^1.9.0",
@@ -35,7 +36,6 @@
     "concurrently": "^9.1.0",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.14",
-    "tsx": "^4.19.2",
     "typescript": "^5.6.3",
     "vite": "^5.4.10"
   }
