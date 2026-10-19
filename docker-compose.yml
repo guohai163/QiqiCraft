@@ -1,11 +1,6 @@
-version: '3.8'
-
 services:
   qiqicraft:
     image: ghcr.io/guohai163/qiqicraft:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
     container_name: qiqicraft
     restart: unless-stopped
     ports:

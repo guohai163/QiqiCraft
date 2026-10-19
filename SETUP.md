@@ -54,8 +54,6 @@ docker compose version
 
 3. **创建 `docker-compose.yml`**：
    ```yaml
-   version: '3.8'
-
    services:
      qiqicraft:
        image: ghcr.io/guohai163/qiqicraft:latest
@@ -82,7 +80,9 @@ docker compose version
 
 ---
 
-### 方式二：从源码构建运行
+### 方式二：从源码本地构建并运行（可选）
+
+如果对代码进行了二次开发，想要在本地直接编译构建：
 
 1. **克隆代码仓库**：
    ```bash
@@ -97,9 +97,10 @@ docker compose version
    nano .env
    ```
 
-3. **启动并自动构建**：
+3. **本地构建镜像并启动**：
    ```bash
-   docker compose up -d --build
+   docker build -t ghcr.io/guohai163/qiqicraft:latest .
+   docker compose up -d
    ```
 
 ---
