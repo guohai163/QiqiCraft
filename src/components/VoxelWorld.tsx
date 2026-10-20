@@ -586,14 +586,15 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
   const surfaceAt = (x: number, z: number) =>
     (surfaceMapRef.current.get(`${Math.round(x)},${Math.round(z)}`) ?? 0) + 0.5;
 
-  const unlockedPetIds = (Object.keys(state.pets || {}) as PetId[]).filter(
-    (id) => state.pets[id]?.unlocked && PET_META[id]
-  );
+  const activePetId = state.activePetId;
+  const activePet =
+    activePetId && state.pets?.[activePetId]?.unlocked ? state.pets[activePetId] : null;
+
   const companionSignature = JSON.stringify({
     show: showCompanions,
     gear: state.equippedGear,
-    pets: unlockedPetIds.map((id) => [id, state.pets[id].name]),
-    active: state.activePetId,
+    activePetId: activePet?.id,
+    activePetName: activePet?.name,
     name: state.childName,
   });
 
@@ -684,25 +685,25 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
       )
     );
 
-    let freeIdx = 0;
-    unlockedPetIds.forEach((petId, i) => {
-      const isActive = petId === state.activePetId;
-      const meta = PET_META[petId];
+    // Only spawn the single pet marked as "出战中" (activePet)
+    if (activePet && PET_META[activePet.id]) {
+      const meta = PET_META[activePet.id];
+      const petName = activePet.name || meta.name;
       list.push(
         make(
-          `pet_${petId}`,
+          `pet_${activePet.id}`,
           'pet',
-          state.pets[petId].name || meta.name,
+          petName,
           [meta.soundText],
-          buildPet(petId),
-          spawn(`pet_${petId}`, 2 + i, 3 - i),
-          isActive ? 1.9 : 1.2,
-          isActive,
-          isActive ? 0 : ++freeIdx,
-          isActive ? '#86efac' : '#ffffff'
+          buildPet(activePet.id),
+          spawn(`pet_${activePet.id}`, 2, 2),
+          1.8,
+          true,
+          0,
+          '#86efac'
         )
       );
-    });
+    }
     entitiesRef.current = list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companionSignature]);
