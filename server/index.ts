@@ -93,7 +93,7 @@ function loadSettings(): ServerSettings {
     openaiBaseUrl: process.env.OPENAI_BASE_URL || localOverrides.openaiBaseUrl || 'https://api.openai.com/v1',
     openaiModel: process.env.OPENAI_MODEL || localOverrides.openaiModel || 'gpt-4o',
     parentPin: process.env.PARENT_PIN || localOverrides.parentPin || '1234',
-    childName: process.env.CHILD_NAME || localOverrides.childName || '小矿工奇奇',
+    childName: process.env.CHILD_NAME || localOverrides.childName || '小矿工淇淇',
     voiceEnabled: localOverrides.voiceEnabled !== undefined ? localOverrides.voiceEnabled : true,
     soundEnabled: localOverrides.soundEnabled !== undefined ? localOverrides.soundEnabled : true,
   };
@@ -106,7 +106,7 @@ function saveSettings(settings: ServerSettings) {
 function getInitialPlayerState(): PlayerState {
   const today = new Date().toISOString().slice(0, 10);
   return {
-    childName: '小矿工奇奇',
+    childName: '小矿工淇淇',
     level: 1,
     xp: 20,
     emeralds: 25,
@@ -174,15 +174,27 @@ function getInitialPlayerState(): PlayerState {
 }
 
 function loadState(): PlayerState {
+  const settings = loadSettings();
+  const effectiveName = settings.childName || process.env.CHILD_NAME || '小矿工淇淇';
   try {
     if (fs.existsSync(STATE_FILE)) {
       const raw = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
-      return { ...getInitialPlayerState(), ...raw };
+      const state: PlayerState = { ...getInitialPlayerState(), ...raw };
+      // Always sync childName from .env / settings, and migrate any old '奇奇' to '淇淇'
+      if (effectiveName) {
+        state.childName = effectiveName;
+      } else if (state.childName && state.childName.includes('奇奇')) {
+        state.childName = state.childName.replace(/奇奇/g, '淇淇');
+      }
+      return state;
     }
   } catch (e) {
     console.error('Failed to load state:', e);
   }
   const initial = getInitialPlayerState();
+  if (effectiveName) {
+    initial.childName = effectiveName;
+  }
   fs.writeFileSync(STATE_FILE, JSON.stringify(initial, null, 2));
   return initial;
 }
@@ -198,8 +210,12 @@ function maskKey(key: string): string {
 
 // GET /api/state
 app.get('/api/state', (_req, res) => {
-  const state = loadState();
   const settings = loadSettings();
+  const state = loadState();
+  if (settings.childName && state.childName !== settings.childName) {
+    state.childName = settings.childName;
+    saveState(state);
+  }
   res.json({
     state,
     settings: {

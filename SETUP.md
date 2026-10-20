@@ -1,6 +1,6 @@
 # 🚀 Linux 环境下基于 Docker Compose 部署指南
 
-本文档说明如何在 Linux 服务器（家庭 NAS、云服务器或树莓派/迷你主机等）上，通过 Docker Compose 快速部署 **奇奇方块学院 (QiqiCraft Academy)**。
+本文档说明如何在 Linux 服务器（家庭 NAS、云服务器或树莓派/迷你主机等）上，通过 Docker Compose 快速部署 **淇淇方块学院 (QiqiCraft Academy)**。
 
 ---
 
@@ -43,7 +43,7 @@ docker compose version
    PARENT_PIN=1234
 
    # 小朋友的冒险昵称
-   CHILD_NAME=小矿工奇奇
+   CHILD_NAME=小矿工淇淇
 
    # OpenAI / AI 视觉模型配置（支持中转代理和各种兼容 OpenAI 格式的模型）
    OPENAI_API_KEY=sk-your-openai-api-key-here

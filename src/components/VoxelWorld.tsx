@@ -619,8 +619,16 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
 
     const spawn = (id: string, dx: number, dz: number) => {
       const p = prevPos[id];
-      if (p) return p;
-      return new THREE.Vector3(dx, surfaceAt(dx, dz), dz);
+      const maxR = Math.max(1.5, Math.floor(currentTierRef.current.size / 2) - 1.0);
+      if (p) {
+        p.x = Math.max(-maxR, Math.min(maxR, p.x));
+        p.z = Math.max(-maxR, Math.min(maxR, p.z));
+        p.y = surfaceAt(p.x, p.z);
+        return p;
+      }
+      const cx = Math.max(-maxR, Math.min(maxR, dx));
+      const cz = Math.max(-maxR, Math.min(maxR, dz));
+      return new THREE.Vector3(cx, surfaceAt(cx, cz), cz);
     };
 
     const make = (
@@ -715,26 +723,56 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
     const ents = entitiesRef.current;
     if (ents.length === 0) return;
     const tierHalf = Math.floor(currentTierRef.current.size / 2);
-    const bound = tierHalf - 0.3;
-    const roam = Math.min(tierHalf, 9); // keep wanderers near the build area
+    // Stay safely at least 1.0 block away from the outer edge to prevent stepping off/clamping
+    const safeBound = Math.max(1.5, tierHalf - 1.0);
+    const roam = Math.min(safeBound, 8); // roam radius
     const hero = ents.find((e) => e.kind === 'hero');
 
     for (const e of ents) {
+      // 0. Boundary rescue: if entity somehow ended up at or beyond safe bound, pull inward and turn around
+      if (Math.abs(e.pos.x) >= safeBound || Math.abs(e.pos.z) >= safeBound) {
+        e.pos.x = Math.max(-safeBound, Math.min(safeBound, e.pos.x));
+        e.pos.z = Math.max(-safeBound, Math.min(safeBound, e.pos.z));
+        e.target = null;
+        e.idle = 0.5 + Math.random() * 1.0;
+        e.yaw = Math.atan2(-e.pos.x, -e.pos.z); // Turn towards center
+      }
+
       // --- decide target ---
       if (e.follow && hero) {
-        const ox = Math.sin(hero.yaw + Math.PI + 0.6) * 1.1;
-        const oz = Math.cos(hero.yaw + Math.PI + 0.6) * 1.1;
-        const d = Math.hypot(hero.pos.x - e.pos.x, hero.pos.z - e.pos.z);
-        if (d > 2.0) e.target = { x: hero.pos.x + ox, z: hero.pos.z + oz };
-        else if (d < 1.2) e.target = null;
+        const followAngle = hero.yaw + Math.PI + 0.4;
+        const rawTx = hero.pos.x + Math.sin(followAngle) * 1.2;
+        const rawTz = hero.pos.z + Math.cos(followAngle) * 1.2;
+        const tx = Math.max(-safeBound, Math.min(safeBound, rawTx));
+        const tz = Math.max(-safeBound, Math.min(safeBound, rawTz));
+        const d = Math.hypot(tx - e.pos.x, tz - e.pos.z);
+        if (d > 1.8) {
+          e.target = { x: tx, z: tz };
+        } else if (d < 1.0) {
+          e.target = null;
+          e.idle = 0.5;
+        }
       } else if (!e.target) {
         e.idle -= dt;
         if (e.idle <= 0) {
-          const r = 4.5;
-          e.target = {
-            x: Math.max(-roam, Math.min(roam, e.pos.x + (Math.random() * 2 - 1) * r)),
-            z: Math.max(-roam, Math.min(roam, e.pos.z + (Math.random() * 2 - 1) * r)),
-          };
+          // If close to safeBound border, steer back towards the center of the world
+          const distFromCenter = Math.hypot(e.pos.x, e.pos.z);
+          let tx: number, tz: number;
+          if (distFromCenter > roam * 0.65) {
+            const angleToCenter = Math.atan2(-e.pos.z, -e.pos.x);
+            const spread = (Math.random() - 0.5) * 1.0;
+            const walkDist = 2.0 + Math.random() * 2.5;
+            tx = e.pos.x + Math.cos(angleToCenter + spread) * walkDist;
+            tz = e.pos.z + Math.sin(angleToCenter + spread) * walkDist;
+          } else {
+            const r = 2.0 + Math.random() * 2.5;
+            const ang = Math.random() * Math.PI * 2;
+            tx = e.pos.x + Math.cos(ang) * r;
+            tz = e.pos.z + Math.sin(ang) * r;
+          }
+          tx = Math.max(-roam, Math.min(roam, tx));
+          tz = Math.max(-roam, Math.min(roam, tz));
+          e.target = { x: tx, z: tz };
         }
       }
 
@@ -744,28 +782,37 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
         const dx = e.target.x - e.pos.x;
         const dz = e.target.z - e.pos.z;
         const dist = Math.hypot(dx, dz);
-        if (dist < 0.08) {
+        if (dist < 0.12) {
           e.target = null;
-          e.idle = 1.5 + Math.random() * 3.5;
+          e.idle = 1.5 + Math.random() * 3.0;
         } else {
           const boost = e.follow && hero && dist > 4 ? 2.2 : 1;
           const step = Math.min(dist, e.speed * boost * dt);
-          const nx = Math.max(-bound, Math.min(bound, e.pos.x + (dx / dist) * step));
-          const nz = Math.max(-bound, Math.min(bound, e.pos.z + (dz / dist) * step));
-          const nextSurface = surfaceAt(nx, nz);
-          if (nextSurface - e.pos.y > 1.15) {
-            // wall higher than one block – turn around and pick another way
+          const nx = Math.max(-safeBound, Math.min(safeBound, e.pos.x + (dx / dist) * step));
+          const nz = Math.max(-safeBound, Math.min(safeBound, e.pos.z + (dz / dist) * step));
+          
+          const movedDist = Math.hypot(nx - e.pos.x, nz - e.pos.z);
+          // If clamped by boundary and cannot move forward, stop immediately and turn around
+          if (movedDist < step * 0.25) {
             e.target = null;
-            e.idle = 0.4 + Math.random();
+            e.idle = 0.8 + Math.random() * 1.5;
+            e.yaw = Math.atan2(-e.pos.x, -e.pos.z); // Turn towards center
           } else {
-            e.pos.x = nx;
-            e.pos.z = nz;
-            moving = true;
-            const wantYaw = Math.atan2(dx, dz);
-            let diff = wantYaw - e.yaw;
-            while (diff > Math.PI) diff -= Math.PI * 2;
-            while (diff < -Math.PI) diff += Math.PI * 2;
-            e.yaw += diff * Math.min(1, dt * 8);
+            const nextSurface = surfaceAt(nx, nz);
+            if (nextSurface - e.pos.y > 1.15) {
+              // wall higher than one block – turn around and pick another way
+              e.target = null;
+              e.idle = 0.5 + Math.random() * 1.0;
+            } else {
+              e.pos.x = nx;
+              e.pos.z = nz;
+              moving = true;
+              const wantYaw = Math.atan2(dx, dz);
+              let diff = wantYaw - e.yaw;
+              while (diff > Math.PI) diff -= Math.PI * 2;
+              while (diff < -Math.PI) diff += Math.PI * 2;
+              e.yaw += diff * Math.min(1, dt * 8);
+            }
           }
         }
       }

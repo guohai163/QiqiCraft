@@ -27,8 +27,8 @@ export const TopStatusBar: React.FC<TopStatusBarProps> = ({
       <div className="flex items-center gap-3">
         <img
           src="/icon-192.png"
-          alt="奇奇方块学院 QiqiCraft Academy"
-          title="奇奇方块学院 QiqiCraft Academy"
+          alt="淇淇方块学院 QiqiCraft Academy"
+          title="淇淇方块学院 QiqiCraft Academy"
           className="w-12 h-12 rounded-xl border-2 border-black shadow-mc hidden sm:block"
         />
         <div className="w-12 h-12 rounded-lg bg-[#5b8731] border-2 border-black shadow-mc flex flex-col items-center justify-center">

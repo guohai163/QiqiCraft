@@ -20,7 +20,7 @@ import { sound } from './utils/sound';
 type NavTab = 'quests' | 'world' | 'pets' | 'shop';
 
 const FALLBACK_INITIAL_STATE: PlayerState = {
-  childName: '小矿工奇奇',
+  childName: '小矿工淇淇',
   level: 1,
   xp: 20,
   emeralds: 25,
@@ -89,7 +89,7 @@ const FALLBACK_SETTINGS: AppSettings = {
   hasApiKey: false,
   openaiBaseUrl: 'https://api.openai.com/v1',
   openaiModel: 'gpt-4o',
-  childName: '小矿工奇奇',
+  childName: '小矿工淇淇',
   parentPin: '1234',
   voiceEnabled: true,
   soundEnabled: true,
@@ -107,11 +107,20 @@ export const App: React.FC = () => {
     fetch('/api/state')
       .then((r) => r.json())
       .then((data) => {
-        if (data?.state) setState(data.state);
-        if (data?.settings) {
-          setSettings(data.settings);
-          sound.soundEnabled = data.settings.soundEnabled;
-          sound.voiceEnabled = data.settings.voiceEnabled;
+        const nextSettings = data?.settings;
+        let nextState = data?.state;
+        if (nextState) {
+          if (nextSettings?.childName) {
+            nextState.childName = nextSettings.childName;
+          } else if (nextState.childName && nextState.childName.includes('奇奇')) {
+            nextState.childName = nextState.childName.replace(/奇奇/g, '淇淇');
+          }
+          setState(nextState);
+        }
+        if (nextSettings) {
+          setSettings(nextSettings);
+          sound.soundEnabled = nextSettings.soundEnabled;
+          sound.voiceEnabled = nextSettings.voiceEnabled;
         }
       })
       .catch((err) => {

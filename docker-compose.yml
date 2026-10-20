@@ -15,7 +15,7 @@ services:
       # - OPENAI_API_KEY=sk-xxxx
       # - OPENAI_BASE_URL=https://api.openai.com/v1
       # - OPENAI_MODEL=gpt-4o
-      # - CHILD_NAME=小矿工奇奇
+      # - CHILD_NAME=小矿工淇淇
     volumes:
       # 持久化存储小朋友的作业照片、存档数据与离线配置
       - ./data:/app/data
