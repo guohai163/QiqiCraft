@@ -157,9 +157,12 @@ export const App: React.FC = () => {
     const data = await res.json();
     if (data?.settings) {
       setSettings(data.settings);
-      if (payload.childName) {
-        setState((prev) => ({ ...prev, childName: payload.childName! }));
-      }
+      setState((prev) => {
+        const next = { ...prev };
+        if (payload.childName) next.childName = payload.childName;
+        if (payload.childGender) next.childGender = payload.childGender as 'boy' | 'girl';
+        return next;
+      });
     }
   };
 

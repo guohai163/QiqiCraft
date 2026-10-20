@@ -199,12 +199,21 @@ export const PixelPetAvatar: React.FC<{
 // Pixel Hero Avatar (Steve/Alex with equipped Helmet, Armor, Weapon, and Cape)
 export const PixelHeroAvatar: React.FC<{
   equippedGear: Record<GearSlot, string>;
+  gender?: 'boy' | 'girl';
   size?: number;
-}> = ({ equippedGear, size = 150 }) => {
+}> = ({ equippedGear, gender = 'boy', size = 150 }) => {
   const helmet = GEAR_CATALOG.find((g) => g.id === equippedGear.helmet) || GEAR_CATALOG[0];
   const armor = GEAR_CATALOG.find((g) => g.id === equippedGear.armor) || GEAR_CATALOG[4];
   const weapon = GEAR_CATALOG.find((g) => g.id === equippedGear.weapon) || GEAR_CATALOG[8];
   const cape = GEAR_CATALOG.find((g) => g.id === equippedGear.cape) || GEAR_CATALOG[12];
+
+  const skinColor = gender === 'girl' ? '#fcdbc2' : '#f1c27d';
+  const armWidth = gender === 'girl' ? 7 : 9;
+  const leftArmX = gender === 'girl' ? 20 : 18;
+  const rightArmX = 53;
+  const legColor = armor.id === 'armor_steve' ? (gender === 'girl' ? '#8b5cf6' : '#1e3a8a') : '#1e3a8a';
+  const defaultHairColor = gender === 'girl' ? '#78350f' : '#3f2b1c';
+  const hairColor = helmet.id === 'helm_none' ? defaultHairColor : helmet.color;
 
   return (
     <svg width={size} height={size} viewBox="0 0 80 80" className="drop-shadow-[0_6px_0_rgba(0,0,0,0.45)]">
@@ -228,33 +237,40 @@ export const PixelHeroAvatar: React.FC<{
         </g>
       )}
 
+      {/* Long hair in background for girls */}
+      {gender === 'girl' && helmet.id === 'helm_none' && (
+        <rect x="26" y="16" width="28" height="18" fill={hairColor} stroke="#18181b" strokeWidth="2" />
+      )}
+
       {/* Legs */}
-      <rect x="29" y="50" width="10" height="20" fill="#1e3a8a" stroke="#18181b" strokeWidth="2" />
-      <rect x="41" y="50" width="10" height="20" fill="#1e3a8a" stroke="#18181b" strokeWidth="2" />
+      <rect x="29" y="50" width="10" height="20" fill={legColor} stroke="#18181b" strokeWidth="2" />
+      <rect x="41" y="50" width="10" height="20" fill={legColor} stroke="#18181b" strokeWidth="2" />
 
       {/* Torso / Armor */}
-      <rect x="27" y="28" width="26" height="22" fill={armor.color} stroke="#18181b" strokeWidth="2" />
+      <rect x="27" y="28" width="26" height="22" fill={armor.id === 'armor_steve' ? (gender === 'girl' ? '#ec4899' : armor.color) : armor.color} stroke="#18181b" strokeWidth="2" />
       <rect x="33" y="32" width="14" height="12" fill={armor.accent} opacity="0.55" />
 
       {/* Left & Right Arms */}
-      <rect x="18" y="28" width="9" height="20" fill={armor.color} stroke="#18181b" strokeWidth="2" />
-      <rect x="53" y="28" width="9" height="20" fill={armor.color} stroke="#18181b" strokeWidth="2" />
+      <rect x={leftArmX} y="28" width={armWidth} height="20" fill={armor.id === 'armor_steve' ? (gender === 'girl' ? '#ec4899' : armor.color) : armor.color} stroke="#18181b" strokeWidth="2" />
+      <rect x={rightArmX} y="28" width={armWidth} height="20" fill={armor.id === 'armor_steve' ? (gender === 'girl' ? '#ec4899' : armor.color) : armor.color} stroke="#18181b" strokeWidth="2" />
       {/* Hands */}
-      <rect x="18" y="43" width="9" height="6" fill="#f1c27d" stroke="#18181b" strokeWidth="1.5" />
-      <rect x="53" y="43" width="9" height="6" fill="#f1c27d" stroke="#18181b" strokeWidth="1.5" />
+      <rect x={leftArmX} y="43" width={armWidth} height="6" fill={skinColor} stroke="#18181b" strokeWidth="1.5" />
+      <rect x={rightArmX} y="43" width={armWidth} height="6" fill={skinColor} stroke="#18181b" strokeWidth="1.5" />
 
       {/* Head */}
-      <rect x="28" y="8" width="24" height="20" fill="#f1c27d" stroke="#18181b" strokeWidth="2" />
+      <rect x="28" y="8" width="24" height="20" fill={skinColor} stroke="#18181b" strokeWidth="2" />
       {/* Hair / Helmet */}
-      <rect x="27" y="6" width="26" height="9" fill={helmet.color} stroke="#18181b" strokeWidth="2" />
-      {helmet.id !== 'helm_none' && (
+      <rect x="27" y="6" width="26" height="9" fill={hairColor} stroke="#18181b" strokeWidth="2" />
+      {helmet.id !== 'helm_none' ? (
         <rect x="36" y="9" width="8" height="5" fill={helmet.accent} />
+      ) : (
+        gender === 'girl' && <rect x="27" y="15" width="6" height="6" fill={hairColor} stroke="#18181b" strokeWidth="1.5" /> // side bangs
       )}
 
       {/* Eyes & Smile */}
-      <rect x="32" y="17" width="4" height="4" fill="#1e3a8a" />
-      <rect x="44" y="17" width="4" height="4" fill="#1e3a8a" />
-      <rect x="36" y="23" width="8" height="2.5" fill="#9a3412" />
+      <rect x="32" y="17" width="4" height="4" fill={gender === 'girl' ? '#059669' : '#1e3a8a'} />
+      <rect x="44" y="17" width="4" height="4" fill={gender === 'girl' ? '#059669' : '#1e3a8a'} />
+      <rect x="36" y="23" width="8" height="2.5" fill={gender === 'girl' ? '#be123c' : '#9a3412'} />
 
       {/* Held Weapon in Right Hand */}
       <g transform="translate(56, 20) rotate(18)">

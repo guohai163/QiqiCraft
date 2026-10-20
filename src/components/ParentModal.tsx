@@ -31,6 +31,7 @@ export const ParentModal: React.FC<ParentModalProps> = ({
   const [baseUrl, setBaseUrl] = useState(settings.openaiBaseUrl || 'https://api.openai.com/v1');
   const [modelName, setModelName] = useState(settings.openaiModel || 'gpt-4o');
   const [childName, setChildName] = useState(settings.childName || state.childName);
+  const [childGender, setChildGender] = useState(settings.childGender || state.childGender || 'boy');
   const [parentPin, setParentPin] = useState(settings.parentPin || '1234');
   const [saveSuccess, setSaveSuccess] = useState('');
 
@@ -63,6 +64,7 @@ export const ParentModal: React.FC<ParentModalProps> = ({
       openaiBaseUrl: baseUrl.trim(),
       openaiModel: modelName.trim(),
       childName: childName.trim(),
+      childGender: childGender as 'boy' | 'girl',
       parentPin: parentPin.trim(),
     });
     setApiKey('');
@@ -232,16 +234,31 @@ export const ParentModal: React.FC<ParentModalProps> = ({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-zinc-300 mb-1">
-                      👦 小朋友昵称 (CHILD_NAME)：
-                    </label>
-                    <input
-                      type="text"
-                      value={childName}
-                      onChange={(e) => setChildName(e.target.value)}
-                      className="w-full px-3.5 py-2 rounded-xl bg-black border border-zinc-700 text-white text-sm"
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-zinc-300 mb-1">
+                        👦 小朋友昵称 (CHILD_NAME)：
+                      </label>
+                      <input
+                        type="text"
+                        value={childName}
+                        onChange={(e) => setChildName(e.target.value)}
+                        className="w-full px-3.5 py-2 rounded-xl bg-black border border-zinc-700 text-white text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-zinc-300 mb-1">
+                        👕 性别 (CHILD_GENDER)：
+                      </label>
+                      <select
+                        value={childGender}
+                        onChange={(e) => setChildGender(e.target.value)}
+                        className="w-full px-3.5 py-2 rounded-xl bg-black border border-zinc-700 text-white text-sm"
+                      >
+                        <option value="boy">男孩</option>
+                        <option value="girl">女孩</option>
+                      </select>
+                    </div>
                   </div>
 
                   <div>

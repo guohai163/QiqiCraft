@@ -41,6 +41,7 @@ interface ServerSettings {
   openaiBaseUrl: string;
   openaiModel: string;
   childName: string;
+  childGender: 'boy' | 'girl';
   parentPin: string;
   voiceEnabled: boolean;
   soundEnabled: boolean;
@@ -94,6 +95,7 @@ function loadSettings(): ServerSettings {
     openaiModel: process.env.OPENAI_MODEL || localOverrides.openaiModel || 'gpt-4o',
     parentPin: process.env.PARENT_PIN || localOverrides.parentPin || '1234',
     childName: process.env.CHILD_NAME || localOverrides.childName || '小矿工淇淇',
+    childGender: (process.env.CHILD_GENDER || localOverrides.childGender || 'boy') as 'boy' | 'girl',
     voiceEnabled: localOverrides.voiceEnabled !== undefined ? localOverrides.voiceEnabled : true,
     soundEnabled: localOverrides.soundEnabled !== undefined ? localOverrides.soundEnabled : true,
   };
@@ -105,8 +107,10 @@ function saveSettings(settings: ServerSettings) {
 
 function getInitialPlayerState(): PlayerState {
   const today = new Date().toISOString().slice(0, 10);
+  const settings = loadSettings();
   return {
-    childName: '小矿工淇淇',
+    childName: settings.childName,
+    childGender: settings.childGender,
     level: 1,
     xp: 20,
     emeralds: 25,
@@ -176,15 +180,19 @@ function getInitialPlayerState(): PlayerState {
 function loadState(): PlayerState {
   const settings = loadSettings();
   const effectiveName = settings.childName || process.env.CHILD_NAME || '小矿工淇淇';
+  const effectiveGender = settings.childGender || process.env.CHILD_GENDER || 'boy';
   try {
     if (fs.existsSync(STATE_FILE)) {
       const raw = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
       const state: PlayerState = { ...getInitialPlayerState(), ...raw };
-      // Always sync childName from .env / settings, and migrate any old '奇奇' to '淇淇'
+      // Always sync childName and childGender from .env / settings, and migrate any old '奇奇' to '淇淇'
       if (effectiveName) {
         state.childName = effectiveName;
       } else if (state.childName && state.childName.includes('奇奇')) {
         state.childName = state.childName.replace(/奇奇/g, '淇淇');
+      }
+      if (effectiveGender) {
+        state.childGender = effectiveGender as 'boy' | 'girl';
       }
       return state;
     }
@@ -194,6 +202,9 @@ function loadState(): PlayerState {
   const initial = getInitialPlayerState();
   if (effectiveName) {
     initial.childName = effectiveName;
+  }
+  if (effectiveGender) {
+    initial.childGender = effectiveGender as 'boy' | 'girl';
   }
   fs.writeFileSync(STATE_FILE, JSON.stringify(initial, null, 2));
   return initial;
@@ -212,8 +223,16 @@ function maskKey(key: string): string {
 app.get('/api/state', (_req, res) => {
   const settings = loadSettings();
   const state = loadState();
+  let stateUpdated = false;
   if (settings.childName && state.childName !== settings.childName) {
     state.childName = settings.childName;
+    stateUpdated = true;
+  }
+  if (settings.childGender && state.childGender !== settings.childGender) {
+    state.childGender = settings.childGender;
+    stateUpdated = true;
+  }
+  if (stateUpdated) {
     saveState(state);
   }
   res.json({
@@ -224,6 +243,7 @@ app.get('/api/state', (_req, res) => {
       openaiBaseUrl: settings.openaiBaseUrl,
       openaiModel: settings.openaiModel,
       childName: settings.childName,
+      childGender: settings.childGender,
       parentPin: settings.parentPin,
       voiceEnabled: settings.voiceEnabled,
       soundEnabled: settings.soundEnabled,
@@ -245,7 +265,7 @@ app.post('/api/state', (req, res) => {
 // POST /api/settings
 app.post('/api/settings', (req, res) => {
   const current = loadSettings();
-  const { openaiApiKey, openaiBaseUrl, openaiModel, childName, parentPin, voiceEnabled, soundEnabled } = req.body;
+  const { openaiApiKey, openaiBaseUrl, openaiModel, childName, childGender, parentPin, voiceEnabled, soundEnabled } = req.body;
 
   const envUpdates: Record<string, string> = {};
   if (typeof openaiApiKey === 'string' && openaiApiKey.trim() !== '') {
@@ -263,6 +283,9 @@ app.post('/api/settings', (req, res) => {
   if (childName !== undefined && childName.trim() !== '') {
     envUpdates.CHILD_NAME = childName.trim();
   }
+  if (childGender !== undefined && (childGender === 'boy' || childGender === 'girl')) {
+    envUpdates.CHILD_GENDER = childGender;
+  }
 
   if (Object.keys(envUpdates).length > 0) {
     writeEnvConfig(envUpdates);
@@ -273,9 +296,17 @@ app.post('/api/settings', (req, res) => {
   if (soundEnabled !== undefined) updated.soundEnabled = Boolean(soundEnabled);
   saveSettings(updated);
 
-  if (childName) {
-    const state = loadState();
+  let stateUpdated = false;
+  const state = loadState();
+  if (childName && state.childName !== childName.trim()) {
     state.childName = childName.trim();
+    stateUpdated = true;
+  }
+  if (childGender && state.childGender !== childGender) {
+    state.childGender = childGender;
+    stateUpdated = true;
+  }
+  if (stateUpdated) {
     saveState(state);
   }
 
@@ -286,6 +317,7 @@ app.post('/api/settings', (req, res) => {
       openaiBaseUrl: updated.openaiBaseUrl,
       openaiModel: updated.openaiModel,
       childName: updated.childName,
+      childGender: updated.childGender,
       parentPin: updated.parentPin,
       voiceEnabled: updated.voiceEnabled,
       soundEnabled: updated.soundEnabled,

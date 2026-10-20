@@ -676,7 +676,7 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
         'hero',
         state.childName || '小矿工',
         HERO_LINES,
-        buildHero(state.equippedGear),
+        buildHero(state.equippedGear, state.childGender),
         spawn('hero', 1, 2),
         1.6,
         false,

@@ -139,7 +139,7 @@ export const HeroShop: React.FC<HeroShopProps> = ({ state, onUpdateState }) => {
 
         {/* Hero & Pet Stage */}
         <div className="my-6 py-6 bg-black/35 border-2 border-white/10 rounded-2xl flex items-end justify-center gap-4 relative">
-          <PixelHeroAvatar equippedGear={state.equippedGear} size={165} />
+          <PixelHeroAvatar equippedGear={state.equippedGear} gender={state.childGender} size={165} />
           <div className="mb-2">
             <PixelPetAvatar petId={activePet.id} level={activePet.level} size={90} />
           </div>

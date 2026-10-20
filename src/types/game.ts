@@ -138,6 +138,7 @@ export interface AppSettings {
   openaiBaseUrl: string;
   openaiModel: string;
   childName: string;
+  childGender: 'boy' | 'girl';
   parentPin: string;
   voiceEnabled: boolean;
   soundEnabled: boolean;
@@ -157,6 +158,7 @@ export interface WorldExpansionTier {
 
 export interface PlayerState {
   childName: string;
+  childGender: 'boy' | 'girl';
   level: number;
   xp: number;
   emeralds: number;

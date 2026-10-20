@@ -94,18 +94,21 @@ function gearOf(equipped: Record<GearSlot, string>, slot: GearSlot) {
 /* ------------------------------------------------------------------ */
 /* Hero (小矿工)                                                        */
 /* ------------------------------------------------------------------ */
-export function buildHero(equipped: Record<GearSlot, string>): VoxelCharacterParts {
+export function buildHero(equipped: Record<GearSlot, string>, gender: 'boy' | 'girl' = 'boy'): VoxelCharacterParts {
   const root = new THREE.Group();
-  const SKIN = '#f0b98a';
+  const SKIN = gender === 'girl' ? '#fcdbc2' : '#f0b98a';
   const helmet = gearOf(equipped, 'helmet');
   const armor = gearOf(equipped, 'armor');
   const weapon = gearOf(equipped, 'weapon');
   const cape = gearOf(equipped, 'cape');
 
-  const shirt = armor?.color || '#06b6d4';
-  const pants = armor?.accent || '#1d4ed8';
-  const hairColor = helmet?.color || '#4a3219';
+  const shirt = armor?.color || (gender === 'girl' ? '#ec4899' : '#06b6d4');
+  const pants = armor?.accent || (gender === 'girl' ? '#8b5cf6' : '#1d4ed8');
+  const hairColor = helmet?.color || (gender === 'girl' ? '#78350f' : '#4a3219');
   const isHelmet = helmet && helmet.id !== 'helm_none';
+
+  const armW = gender === 'girl' ? 0.15 : 0.2;
+  const armSx = gender === 'girl' ? 0.275 : 0.3;
 
   // Legs (pivot at hip)
   const legs: THREE.Object3D[] = [];
@@ -124,10 +127,10 @@ export function buildHero(equipped: Record<GearSlot, string>): VoxelCharacterPar
 
   // Arms (pivot at shoulder)
   const arms: THREE.Object3D[] = [];
-  for (const sx of [-0.3, 0.3]) {
+  for (const sx of [-armSx, armSx]) {
     const sh = pivot(root, sx, 1.18, 0);
-    box(sh, 0.2, 0.24, 0.2, shirt, 0, -0.12, 0); // sleeve
-    box(sh, 0.2, 0.36, 0.2, SKIN, 0, -0.42, 0); // forearm
+    box(sh, armW, 0.24, 0.2, shirt, 0, -0.12, 0); // sleeve
+    box(sh, armW, 0.36, 0.2, SKIN, 0, -0.42, 0); // forearm
     arms.push(sh);
   }
 
@@ -156,8 +159,8 @@ export function buildHero(equipped: Record<GearSlot, string>): VoxelCharacterPar
   // eyes + mouth on the front (+z)
   box(head, 0.08, 0.05, 0.01, '#ffffff', -0.1, 0.2, 0.201);
   box(head, 0.08, 0.05, 0.01, '#ffffff', 0.1, 0.2, 0.201);
-  box(head, 0.04, 0.05, 0.012, '#3b2a8a', -0.08, 0.2, 0.202);
-  box(head, 0.04, 0.05, 0.012, '#3b2a8a', 0.08, 0.2, 0.202);
+  box(head, 0.04, 0.05, 0.012, gender === 'girl' ? '#059669' : '#3b2a8a', -0.08, 0.2, 0.202);
+  box(head, 0.04, 0.05, 0.012, gender === 'girl' ? '#059669' : '#3b2a8a', 0.08, 0.2, 0.202);
   box(head, 0.14, 0.04, 0.01, '#9a5b3c', 0, 0.08, 0.201);
   if (isHelmet) {
     box(head, 0.44, 0.14, 0.44, hairColor, 0, 0.38, 0);
@@ -166,9 +169,16 @@ export function buildHero(equipped: Record<GearSlot, string>): VoxelCharacterPar
     box(head, 0.06, 0.24, 0.44, hairColor, 0.21, 0.27, 0);
     if (helmet?.accent) box(head, 0.06, 0.1, 0.46, helmet.accent, 0, 0.46, 0);
   } else {
-    box(head, 0.42, 0.1, 0.42, hairColor, 0, 0.37, 0);
-    box(head, 0.42, 0.24, 0.05, hairColor, 0, 0.26, -0.19);
-    box(head, 0.42, 0.06, 0.03, hairColor, 0, 0.31, 0.2);
+    // Hair
+    box(head, 0.42, 0.1, 0.42, hairColor, 0, 0.37, 0); // top hair
+    box(head, 0.42, 0.24, 0.05, hairColor, 0, 0.26, -0.19); // back hair
+    box(head, 0.42, 0.06, 0.03, hairColor, 0, 0.31, 0.2); // bangs
+    if (gender === 'girl') {
+      // Long hair for girls
+      box(head, 0.42, 0.3, 0.05, hairColor, 0, 0, -0.19); // longer back hair
+      box(head, 0.06, 0.2, 0.1, hairColor, -0.21, 0.2, 0.1); // side bangs
+      box(head, 0.06, 0.2, 0.1, hairColor, 0.21, 0.2, 0.1); // side bangs
+    }
   }
 
   // Cape
