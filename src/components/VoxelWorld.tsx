@@ -11,15 +11,43 @@ import {
   Compass,
   Sparkles,
   Trash2,
-  Map,
+  Map as MapIcon,
   Check,
   Lock,
   Move,
 } from 'lucide-react';
-import { BlockId, PlacedBlock, PlayerState, WorldExpansionTier } from '../types/game';
-import { BLOCK_CATALOG, BLUEPRINTS, WORLD_EXPANSION_TIERS } from '../data/catalog';
+import { BlockId, PetId, PlacedBlock, PlayerState, WorldExpansionTier } from '../types/game';
+import { BLOCK_CATALOG, BLUEPRINTS, PET_META, WORLD_EXPANSION_TIERS } from '../data/catalog';
 import { BlockCubeIcon } from './PixelVisuals';
 import { sound } from '../utils/sound';
+import { buildHero, buildPet, makeNameTag, VoxelCharacterParts } from './voxelCharacters';
+
+// A hero / pet walking around inside the 3D world
+interface WorldEntity {
+  id: string;
+  kind: 'hero' | 'pet';
+  name: string;
+  lines: string[];
+  parts: VoxelCharacterParts;
+  pos: THREE.Vector3;
+  target: { x: number; z: number } | null;
+  idle: number;
+  speed: number;
+  follow: boolean; // active pet follows the hero
+  followIndex: number;
+  phase: number;
+  swing: number;
+  hop: number;
+  yaw: number;
+  seed: number;
+}
+
+const HERO_LINES = [
+  '我要把这里建成最酷的城堡！',
+  '写完作业，就能领到更多方块啦！',
+  '今天也要做一个认真的小矿工！',
+  '嘿！我们一起去探险吧！',
+];
 
 interface VoxelWorldProps {
   state: PlayerState;
@@ -137,6 +165,8 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
   const [cameraDist, setCameraDist] = useState<number>(16);
   const [panTarget, setPanTarget] = useState<{ x: number; z: number }>({ x: 0, z: 0 });
   const [toastMsg, setToastMsg] = useState<string>('');
+  const [showCompanions, setShowCompanions] = useState<boolean>(true);
+  const [followHero, setFollowHero] = useState<boolean>(false);
 
   const worldSizeLevel = state.worldSizeLevel || 1;
   const currentTier: WorldExpansionTier =
@@ -160,6 +190,17 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
   const blocksGroupRef = useRef<THREE.Group | null>(null);
   const blueprintGroupRef = useRef<THREE.Group | null>(null);
   const materialsCacheRef = useRef<Record<string, THREE.Material | THREE.Material[]>>({});
+
+  // Walking characters (hero + pets)
+  const entitiesGroupRef = useRef<THREE.Group | null>(null);
+  const entitiesRef = useRef<WorldEntity[]>([]);
+  const surfaceMapRef = useRef<Map<string, number>>(new Map());
+  const tickRef = useRef<(dt: number, t: number) => void>(() => {});
+  const entityTapRef = useRef<(id: string) => void>(() => {});
+  const followHeroRef = useRef(followHero);
+  followHeroRef.current = followHero;
+  const camParamsRef = useRef({ angle: cameraAngle, pitch: cameraPitch, dist: cameraDist });
+  camParamsRef.current = { angle: cameraAngle, pitch: cameraPitch, dist: cameraDist };
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -234,6 +275,10 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
     scene.add(blueprintGroup);
     blueprintGroupRef.current = blueprintGroup;
 
+    const entitiesGroup = new THREE.Group();
+    scene.add(entitiesGroup);
+    entitiesGroupRef.current = entitiesGroup;
+
     // Pointer interaction (Support touch drag to rotate + tap to place/remove block)
     let isDragging = false;
     let startX = 0;
@@ -277,6 +322,18 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
         mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
         raycaster.setFromCamera(mouse, camera);
+
+        // Tapping a hero / pet → it jumps and talks
+        const entHits = raycaster.intersectObjects(entitiesGroup.children, true);
+        if (entHits.length > 0) {
+          let o: THREE.Object3D | null = entHits[0].object;
+          while (o && !o.userData.entityId) o = o.parent;
+          if (o) {
+            entityTapRef.current(o.userData.entityId as string);
+            return;
+          }
+        }
+
         const intersects = raycaster.intersectObjects(blocksGroup.children, false);
 
         if (intersects.length > 0) {
@@ -370,8 +427,11 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
     window.addEventListener('resize', handleResize);
 
     let reqId: number;
+    const clock = new THREE.Clock();
     const animate = () => {
       reqId = requestAnimationFrame(animate);
+      const dt = Math.min(0.1, clock.getDelta());
+      tickRef.current(dt, clock.elapsedTime);
       renderer.render(scene, camera);
     };
     animate();
@@ -389,13 +449,13 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
   // Update Camera Position when angle, pitch, distance, or panTarget changes
   useEffect(() => {
     const camera = cameraRef.current;
-    if (!camera) return;
+    if (!camera || followHero) return; // follow-mode camera is driven per-frame in tick
     const x = panTarget.x + cameraDist * Math.cos(cameraPitch) * Math.sin(cameraAngle);
     const y = cameraDist * Math.sin(cameraPitch) + 1.5;
     const z = panTarget.z + cameraDist * Math.cos(cameraPitch) * Math.cos(cameraAngle);
     camera.position.set(x, y, z);
     camera.lookAt(panTarget.x, 1.5, panTarget.z);
-  }, [cameraAngle, cameraPitch, cameraDist, panTarget]);
+  }, [cameraAngle, cameraPitch, cameraDist, panTarget, followHero]);
 
   // Update Day / Sunset / Night Lighting
   useEffect(() => {
@@ -510,6 +570,246 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
       bpGroup.add(ghostMesh);
     });
   }, [activeBlueprintId, state.placedBlocks]);
+
+  // ---------------- Walking Hero & Pets ----------------
+
+  // Column surface height map: key "x,z" → highest placed block y (ground = 0)
+  useEffect(() => {
+    const map = new Map<string, number>();
+    state.placedBlocks.forEach((b) => {
+      const key = `${b.x},${b.z}`;
+      map.set(key, Math.max(map.get(key) ?? 0, b.y));
+    });
+    surfaceMapRef.current = map;
+  }, [state.placedBlocks]);
+
+  const surfaceAt = (x: number, z: number) =>
+    (surfaceMapRef.current.get(`${Math.round(x)},${Math.round(z)}`) ?? 0) + 0.5;
+
+  const unlockedPetIds = (Object.keys(state.pets || {}) as PetId[]).filter(
+    (id) => state.pets[id]?.unlocked && PET_META[id]
+  );
+  const companionSignature = JSON.stringify({
+    show: showCompanions,
+    gear: state.equippedGear,
+    pets: unlockedPetIds.map((id) => [id, state.pets[id].name]),
+    active: state.activePetId,
+    name: state.childName,
+  });
+
+  // (Re)build character meshes when gear / pets change, preserving positions
+  useEffect(() => {
+    const group = entitiesGroupRef.current;
+    if (!group) return;
+
+    const prevPos: Record<string, THREE.Vector3> = {};
+    entitiesRef.current.forEach((e) => (prevPos[e.id] = e.pos.clone()));
+    while (group.children.length > 0) {
+      const child = group.children[0];
+      child.traverse((o) => {
+        if (o instanceof THREE.Sprite) {
+          o.material.map?.dispose();
+          o.material.dispose();
+        }
+      });
+      group.remove(child);
+    }
+    entitiesRef.current = [];
+    if (!showCompanions) return;
+
+    const spawn = (id: string, dx: number, dz: number) => {
+      const p = prevPos[id];
+      if (p) return p;
+      return new THREE.Vector3(dx, surfaceAt(dx, dz), dz);
+    };
+
+    const make = (
+      id: string,
+      kind: 'hero' | 'pet',
+      name: string,
+      lines: string[],
+      parts: VoxelCharacterParts,
+      pos: THREE.Vector3,
+      speed: number,
+      follow: boolean,
+      followIndex: number,
+      tagColor: string
+    ): WorldEntity => {
+      parts.group.userData.entityId = id;
+      const tag = makeNameTag(name, tagColor);
+      tag.position.set(0, parts.height + 0.35, 0);
+      parts.group.add(tag);
+      group.add(parts.group);
+      return {
+        id,
+        kind,
+        name,
+        lines,
+        parts,
+        pos,
+        target: null,
+        idle: Math.random() * 2,
+        speed,
+        follow,
+        followIndex,
+        phase: 0,
+        swing: 0,
+        hop: 0,
+        yaw: Math.random() * Math.PI * 2,
+        seed: Math.random() * 10,
+      };
+    };
+
+    const list: WorldEntity[] = [];
+    list.push(
+      make(
+        'hero',
+        'hero',
+        state.childName || '小矿工',
+        HERO_LINES,
+        buildHero(state.equippedGear),
+        spawn('hero', 1, 2),
+        1.6,
+        false,
+        0,
+        '#fde047'
+      )
+    );
+
+    let freeIdx = 0;
+    unlockedPetIds.forEach((petId, i) => {
+      const isActive = petId === state.activePetId;
+      const meta = PET_META[petId];
+      list.push(
+        make(
+          `pet_${petId}`,
+          'pet',
+          state.pets[petId].name || meta.name,
+          [meta.soundText],
+          buildPet(petId),
+          spawn(`pet_${petId}`, 2 + i, 3 - i),
+          isActive ? 1.9 : 1.2,
+          isActive,
+          isActive ? 0 : ++freeIdx,
+          isActive ? '#86efac' : '#ffffff'
+        )
+      );
+    });
+    entitiesRef.current = list;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companionSignature]);
+
+  // Tap a character: hop + speech
+  entityTapRef.current = (id: string) => {
+    const e = entitiesRef.current.find((x) => x.id === id);
+    if (!e) return;
+    e.hop = 1;
+    const line = e.lines[Math.floor(Math.random() * e.lines.length)];
+    showToast(`${e.kind === 'hero' ? '🧑‍🔧' : '🐾'} ${e.name}：${line}`);
+    sound.playClick();
+    sound.speak(line);
+  };
+
+  // Per-frame wander / follow / animation logic (called from the render loop)
+  tickRef.current = (dt: number, t: number) => {
+    const ents = entitiesRef.current;
+    if (ents.length === 0) return;
+    const tierHalf = Math.floor(currentTierRef.current.size / 2);
+    const bound = tierHalf - 0.3;
+    const roam = Math.min(tierHalf, 9); // keep wanderers near the build area
+    const hero = ents.find((e) => e.kind === 'hero');
+
+    for (const e of ents) {
+      // --- decide target ---
+      if (e.follow && hero) {
+        const ox = Math.sin(hero.yaw + Math.PI + 0.6) * 1.1;
+        const oz = Math.cos(hero.yaw + Math.PI + 0.6) * 1.1;
+        const d = Math.hypot(hero.pos.x - e.pos.x, hero.pos.z - e.pos.z);
+        if (d > 2.0) e.target = { x: hero.pos.x + ox, z: hero.pos.z + oz };
+        else if (d < 1.2) e.target = null;
+      } else if (!e.target) {
+        e.idle -= dt;
+        if (e.idle <= 0) {
+          const r = 4.5;
+          e.target = {
+            x: Math.max(-roam, Math.min(roam, e.pos.x + (Math.random() * 2 - 1) * r)),
+            z: Math.max(-roam, Math.min(roam, e.pos.z + (Math.random() * 2 - 1) * r)),
+          };
+        }
+      }
+
+      // --- move ---
+      let moving = false;
+      if (e.target) {
+        const dx = e.target.x - e.pos.x;
+        const dz = e.target.z - e.pos.z;
+        const dist = Math.hypot(dx, dz);
+        if (dist < 0.08) {
+          e.target = null;
+          e.idle = 1.5 + Math.random() * 3.5;
+        } else {
+          const boost = e.follow && hero && dist > 4 ? 2.2 : 1;
+          const step = Math.min(dist, e.speed * boost * dt);
+          const nx = Math.max(-bound, Math.min(bound, e.pos.x + (dx / dist) * step));
+          const nz = Math.max(-bound, Math.min(bound, e.pos.z + (dz / dist) * step));
+          const nextSurface = surfaceAt(nx, nz);
+          if (nextSurface - e.pos.y > 1.15) {
+            // wall higher than one block – turn around and pick another way
+            e.target = null;
+            e.idle = 0.4 + Math.random();
+          } else {
+            e.pos.x = nx;
+            e.pos.z = nz;
+            moving = true;
+            const wantYaw = Math.atan2(dx, dz);
+            let diff = wantYaw - e.yaw;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            e.yaw += diff * Math.min(1, dt * 8);
+          }
+        }
+      }
+
+      // --- vertical: stand on top of blocks (smooth hop up / drop down) ---
+      const ground = surfaceAt(e.pos.x, e.pos.z);
+      e.pos.y += (ground - e.pos.y) * Math.min(1, dt * 10);
+      if (e.hop > 0) e.hop = Math.max(0, e.hop - dt * 2.2);
+      const hopY = Math.sin(e.hop * Math.PI) * 0.55;
+
+      // --- limb animation ---
+      e.swing += ((moving ? 0.7 : 0) - e.swing) * Math.min(1, dt * 8);
+      if (moving) e.phase += dt * e.speed * 7;
+      const s = Math.sin(e.phase) * e.swing;
+      e.parts.legs.forEach((leg, i) => {
+        leg.rotation.x = (i === 0 || i === 3 ? 1 : -1) * s;
+      });
+      e.parts.arms.forEach((arm, i) => {
+        arm.rotation.x = (i === 0 ? -1 : 1) * s * 0.9;
+      });
+      if (e.parts.tail) e.parts.tail.rotation.y = Math.sin(t * (e.follow ? 11 : 5) + e.seed) * 0.5;
+      if (e.parts.head) e.parts.head.rotation.y = moving ? 0 : Math.sin(t * 0.8 + e.seed) * 0.35;
+
+      const bob = moving ? Math.abs(Math.sin(e.phase)) * 0.04 : 0;
+      e.parts.group.position.set(e.pos.x, e.pos.y + hopY + bob, e.pos.z);
+      e.parts.group.rotation.y = e.yaw;
+    }
+
+    // Follow-cam: orbit around the hero
+    const camera = cameraRef.current;
+    if (followHeroRef.current && hero && camera) {
+      const { angle, pitch, dist } = camParamsRef.current;
+      const d = Math.min(dist, 18);
+      const tx = hero.pos.x;
+      const ty = hero.pos.y + 1;
+      const tz = hero.pos.z;
+      camera.position.set(
+        tx + d * Math.cos(pitch) * Math.sin(angle),
+        ty + d * Math.sin(pitch),
+        tz + d * Math.cos(pitch) * Math.cos(angle)
+      );
+      camera.lookAt(tx, ty, tz);
+    }
+  };
 
   // Pan Camera Target helper for roaming across large worlds
   const handlePanCamera = (dir: 'up' | 'down' | 'left' | 'right' | 'center') => {
@@ -676,7 +976,7 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
               }}
               className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:brightness-110 text-zinc-950 font-black text-xs sm:text-sm border-2 border-black shadow-mc flex items-center gap-1.5"
             >
-              <Map className="w-4 h-4" />
+              <MapIcon className="w-4 h-4" />
               <span>
                 🗺️ 领地：{currentTier.name} ({currentTier.size}×{currentTier.size})
               </span>
@@ -743,6 +1043,41 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
           </div>
         )}
 
+        {/* Companion controls: show/hide hero & pets, follow camera */}
+        <div className="absolute bottom-[6.75rem] left-3 flex items-center gap-1.5 pointer-events-auto">
+          <button
+            onClick={() => {
+              sound.playClick();
+              setShowCompanions((v) => {
+                if (v) setFollowHero(false);
+                return !v;
+              });
+            }}
+            className={`px-3 py-1.5 rounded-xl border-2 font-black text-xs shadow-mc ${
+              showCompanions
+                ? 'bg-lime-500 text-zinc-950 border-black'
+                : 'bg-black/70 text-white border-white/20'
+            }`}
+          >
+            🐾 伙伴{showCompanions ? '出来玩中' : '回家休息'}
+          </button>
+          {showCompanions && (
+            <button
+              onClick={() => {
+                sound.playClick();
+                setFollowHero((v) => !v);
+              }}
+              className={`px-3 py-1.5 rounded-xl border-2 font-black text-xs shadow-mc ${
+                followHero
+                  ? 'bg-amber-400 text-zinc-950 border-black'
+                  : 'bg-black/70 text-white border-white/20'
+              }`}
+            >
+              👀 {followHero ? '跟随中（点我取消）' : '镜头跟随小矿工'}
+            </button>
+          )}
+        </div>
+
         {/* Bottom-Left Camera Pan D-Pad for Roaming Large Worlds */}
         <div className="absolute bottom-14 left-3 bg-black/70 backdrop-blur-sm p-2 rounded-2xl border-2 border-white/20 flex items-center gap-1.5 pointer-events-auto">
           <div className="text-[11px] font-black text-lime-300 px-1 flex items-center gap-1">
@@ -790,7 +1125,7 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
         {/* Bottom Floating Instruction Pill */}
         <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-none">
           <div className="bg-black/70 backdrop-blur-sm px-3.5 py-1.5 rounded-xl border border-white/20 text-xs font-bold text-white">
-            💡 单指滑动旋转 · 点击方块即可【{toolMode === 'build' ? '放置方块' : '挖掉回收'}】 · 当前领地 {currentTier.size}×{currentTier.size}（最高 {currentTier.maxHeight} 层）
+            💡 单指滑动旋转 · 点击方块即可【{toolMode === 'build' ? '放置方块' : '挖掉回收'}】 · 点小伙伴会说话哦 · 当前领地 {currentTier.size}×{currentTier.size}（最高 {currentTier.maxHeight} 层）
           </div>
 
           <button
