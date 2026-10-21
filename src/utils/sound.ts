@@ -1,15 +1,35 @@
-// Web Audio API Synthesizer for Minecraft-style sound effects + Reliable Chinese TTS Voice Reader
+// Web Audio API Synthesizer for Minecraft-style sound effects + Microsoft Edge Neural TTS Reader (iPad Safari compatible)
+
+const SILENT_WAV_DATA_URI =
+  'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
 
 class SoundManager {
   private ctx: AudioContext | null = null;
-  private currentAudio: HTMLAudioElement | null = null;
+  private sharedAudio: HTMLAudioElement | null = null;
+  private currentBlobUrl: string | null = null;
+  private currentSourceNode: AudioBufferSourceNode | null = null;
+  private abortController: AbortController | null = null;
+  private speakSeq = 0;
   private currentUtterance: SpeechSynthesisUtterance | null = null;
   private speakTimer: ReturnType<typeof setTimeout> | null = null;
   private stateListeners = new Set<(speaking: boolean) => void>();
+  private unlocked = false;
 
   public soundEnabled = true;
   public voiceEnabled = true;
   public isSpeaking = false;
+
+  constructor() {
+    if (typeof window !== 'undefined') {
+      const unlockHandler = () => {
+        this.unlockAudio();
+      };
+      window.addEventListener('touchstart', unlockHandler, { passive: true });
+      window.addEventListener('pointerdown', unlockHandler, { passive: true });
+      window.addEventListener('click', unlockHandler, { passive: true });
+      window.addEventListener('keydown', unlockHandler, { passive: true });
+    }
+  }
 
   private setSpeaking(val: boolean) {
     this.isSpeaking = val;
@@ -23,9 +43,9 @@ class SoundManager {
     };
   }
 
-  private getContext(): AudioContext | null {
-    if (!this.soundEnabled) return null;
-    if (!this.ctx && typeof window !== 'undefined') {
+  private getRawContext(): AudioContext | null {
+    if (typeof window === 'undefined') return null;
+    if (!this.ctx) {
       const AudioCtx =
         window.AudioContext ||
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -39,8 +59,68 @@ class SoundManager {
     return this.ctx;
   }
 
+  private getContext(): AudioContext | null {
+    if (!this.soundEnabled) return null;
+    return this.getRawContext();
+  }
+
+  private getSharedAudio(): HTMLAudioElement | null {
+    if (typeof window === 'undefined') return null;
+    if (!this.sharedAudio) {
+      this.sharedAudio = new Audio();
+      this.sharedAudio.preload = 'auto';
+      this.sharedAudio.setAttribute('playsinline', 'true');
+      this.sharedAudio.setAttribute('webkit-playsinline', 'true');
+    }
+    return this.sharedAudio;
+  }
+
+  // Unlock both Web Audio API and HTMLAudioElement on first user gesture (required by iPadOS/iOS Safari)
+  public unlockAudio() {
+    const ctx = this.getRawContext();
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+    if (this.unlocked) return;
+    this.unlocked = true;
+
+    if (ctx) {
+      try {
+        const buffer = ctx.createBuffer(1, 1, 22050);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start(0);
+      } catch {
+        // ignore
+      }
+    }
+
+    const audio = this.getSharedAudio();
+    if (audio && !this.isSpeaking) {
+      try {
+        audio.muted = true;
+        audio.src = SILENT_WAV_DATA_URI;
+        const p = audio.play();
+        if (p) {
+          p.then(() => {
+            audio.pause();
+            audio.muted = false;
+            audio.currentTime = 0;
+          }).catch(() => {
+            audio.muted = false;
+            this.unlocked = false;
+          });
+        }
+      } catch {
+        audio.muted = false;
+      }
+    }
+  }
+
   // Classic Minecraft button click
   playClick() {
+    this.unlockAudio();
     const ctx = this.getContext();
     if (!ctx) return;
     const osc = ctx.createOscillator();
@@ -159,7 +239,7 @@ class SoundManager {
       .trim();
   }
 
-  // Fallback browser speechSynthesis with Chrome cancel/GC bug fixes
+  // Fallback browser speechSynthesis with Chrome/Safari fixes
   private speakWithBrowserTTS(cleanText: string) {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
       this.setSpeaking(false);
@@ -190,14 +270,15 @@ class SoundManager {
         utter.onerror = () => this.setSpeaking(false);
 
         window.speechSynthesis.speak(utter);
-      }, 80);
+      }, 60);
     } catch {
       this.setSpeaking(false);
     }
   }
 
-  // Speak Chinese text for 2nd grader (Primary: Server WAV TTS stream; Fallback: Browser SpeechSynthesis)
-  speak(text: string, force = false) {
+  // Speak Chinese text using Microsoft Edge Neural TTS via /api/tts
+  // Uses Web Audio API (AudioContext) primary output so iPad Safari plays reliably even after async homework grading
+  async speak(text: string, force = false) {
     if ((!this.voiceEnabled && !force) || typeof window === 'undefined') {
       return;
     }
@@ -205,47 +286,130 @@ class SoundManager {
     const cleanText = this.cleanSpeechText(text);
     if (!cleanText) return;
 
+    this.unlockAudio();
     this.stopSpeak();
+
+    const seq = ++this.speakSeq;
+    const controller = new AbortController();
+    this.abortController = controller;
     this.setSpeaking(true);
 
     const audioUrl = `/api/tts?text=${encodeURIComponent(cleanText)}`;
-    const audio = new Audio(audioUrl);
-    this.currentAudio = audio;
 
-    audio.onended = () => {
-      if (this.currentAudio === audio) {
-        this.currentAudio = null;
-        this.setSpeaking(false);
+    try {
+      const response = await fetch(audioUrl, { signal: controller.signal });
+      if (seq !== this.speakSeq) return;
+      if (!response.ok) {
+        throw new Error(`TTS HTTP ${response.status}`);
       }
-    };
 
-    audio.onerror = () => {
-      if (this.currentAudio === audio) {
-        this.currentAudio = null;
-        // Fallback to browser Web Speech API if backend /api/tts fails
+      const arrayBuffer = await response.arrayBuffer();
+      if (seq !== this.speakSeq || arrayBuffer.byteLength === 0) return;
+
+      // Primary playback: Web Audio API (AudioContext) - bypasses iOS Safari async gesture blockage
+      const ctx = this.getRawContext();
+      if (ctx) {
+        try {
+          if (ctx.state === 'suspended') {
+            await ctx.resume();
+          }
+          const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+          if (seq !== this.speakSeq) return;
+
+          const source = ctx.createBufferSource();
+          source.buffer = audioBuffer;
+          source.connect(ctx.destination);
+          this.currentSourceNode = source;
+
+          source.onended = () => {
+            if (this.currentSourceNode === source) {
+              this.currentSourceNode = null;
+              this.setSpeaking(false);
+            }
+          };
+
+          source.start(0);
+          return;
+        } catch {
+          // If Web Audio decode fails, fall through to persistent HTMLAudioElement
+        }
+      }
+
+      // Secondary playback: Persistent unlocked HTMLAudioElement with Blob URL
+      if (seq !== this.speakSeq) return;
+      const audio = this.getSharedAudio();
+      if (!audio) {
+        this.speakWithBrowserTTS(cleanText);
+        return;
+      }
+
+      const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
+      const blobUrl = URL.createObjectURL(blob);
+      this.currentBlobUrl = blobUrl;
+
+      audio.muted = false;
+      audio.src = blobUrl;
+      audio.onended = () => {
+        if (seq === this.speakSeq) {
+          this.cleanupBlobUrl();
+          this.setSpeaking(false);
+        }
+      };
+      audio.onerror = () => {
+        if (seq === this.speakSeq) {
+          this.cleanupBlobUrl();
+          this.speakWithBrowserTTS(cleanText);
+        }
+      };
+
+      await audio.play();
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return;
+      }
+      if (seq === this.speakSeq) {
         this.speakWithBrowserTTS(cleanText);
       }
-    };
+    }
+  }
 
-    audio.play().catch(() => {
-      // If autoplay policy or network blocked HTML5 audio, try browser speechSynthesis
-      if (this.currentAudio === audio) {
-        this.currentAudio = null;
-        this.speakWithBrowserTTS(cleanText);
-      }
-    });
+  private cleanupBlobUrl() {
+    if (this.currentBlobUrl) {
+      URL.revokeObjectURL(this.currentBlobUrl);
+      this.currentBlobUrl = null;
+    }
   }
 
   stopSpeak() {
+    this.speakSeq++;
+    if (this.abortController) {
+      this.abortController.abort();
+      this.abortController = null;
+    }
     if (this.speakTimer) {
       clearTimeout(this.speakTimer);
       this.speakTimer = null;
     }
-    if (this.currentAudio) {
-      this.currentAudio.pause();
-      this.currentAudio.src = '';
-      this.currentAudio = null;
+    if (this.currentSourceNode) {
+      try {
+        this.currentSourceNode.onended = null;
+        this.currentSourceNode.stop();
+        this.currentSourceNode.disconnect();
+      } catch {
+        // ignore
+      }
+      this.currentSourceNode = null;
     }
+    if (this.sharedAudio) {
+      try {
+        this.sharedAudio.onended = null;
+        this.sharedAudio.onerror = null;
+        this.sharedAudio.pause();
+      } catch {
+        // ignore
+      }
+    }
+    this.cleanupBlobUrl();
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel();

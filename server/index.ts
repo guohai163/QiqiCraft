@@ -15,6 +15,7 @@ import {
   SubmissionRecord,
 } from '../src/types/game';
 import { DEFAULT_HOMEWORK_TASKS } from '../src/data/catalog';
+import { synthesizeEdgeTTS } from './edgeTts';
 
 dotenv.config();
 
@@ -716,7 +717,19 @@ app.get('/api/tts', async (req, res) => {
     return res.status(400).send('Empty clean text');
   }
 
-  // 1. If running on macOS with /usr/bin/say available
+  // 1. Primary: Microsoft Edge Free Neural TTS (works across Linux Docker, macOS, Windows, and iPad Safari)
+  try {
+    const mp3Buffer = await synthesizeEdgeTTS(cleanText);
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Content-Length', String(mp3Buffer.length));
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.send(mp3Buffer);
+  } catch (edgeErr) {
+    console.warn('Edge TTS failed, falling back:', edgeErr);
+  }
+
+  // 2. Secondary fallback: If running on macOS with /usr/bin/say available
   if (process.platform === 'darwin' && fs.existsSync('/usr/bin/say')) {
     const tmpWav = path.join(
       os.tmpdir(),
@@ -745,7 +758,7 @@ app.get('/api/tts', async (req, res) => {
     return;
   }
 
-  // 2. If OpenAI API Key is configured, try OpenAI TTS
+  // 3. Tertiary fallback: If OpenAI API Key is configured, try OpenAI TTS
   const settings = loadSettings();
   if (settings.openaiApiKey && settings.openaiApiKey.trim().length > 5) {
     try {
@@ -761,6 +774,7 @@ app.get('/api/tts', async (req, res) => {
       });
       const buffer = Buffer.from(await mp3.arrayBuffer());
       res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Content-Length', String(buffer.length));
       res.setHeader('Cache-Control', 'no-store');
       return res.send(buffer);
     } catch {
@@ -768,7 +782,7 @@ app.get('/api/tts', async (req, res) => {
     }
   }
 
-  // 3. Fallback to client browser Web Speech API
+  // 4. Final fallback to client browser Web Speech API
   return res.status(404).json({ message: 'Server TTS not available, fallback to client' });
 });
 
