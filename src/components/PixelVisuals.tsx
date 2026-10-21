@@ -63,6 +63,61 @@ export const BlockCubeIcon: React.FC<{ blockId: BlockId; size?: number; classNam
           <line x1="40" y1="32" x2="48" y2="24" stroke="#ffffff" strokeWidth="2.5" />
         </>
       )}
+      {blockId === 'pony_twilight' && (
+        <>
+          {/* Glowing star cutie mark on top */}
+          <polygon points="32,10 35,16 42,17 36,21 38,27 32,23 26,27 28,21 22,17 29,16" fill="#f472b6" stroke="#ffffff" strokeWidth="1" />
+          {/* Left face: Twilight Sparkle face + mane stripe + horn */}
+          <polygon points="12,24 27,31 27,36 12,29" fill="#312e81" />
+          <polygon points="15,25 24,29 24,33 15,29" fill="#ec4899" />
+          <polygon points="18,22 21,15 23,24" fill="#fde047" />
+          <circle cx="15" cy="38" r="2.6" fill="#ffffff" />
+          <circle cx="15.5" cy="38" r="1.4" fill="#581c87" />
+          <circle cx="24" cy="42" r="2.6" fill="#ffffff" />
+          <circle cx="24.5" cy="42" r="1.4" fill="#581c87" />
+          {/* Right face: Star cutie mark */}
+          <polygon points="45,30 48,37 53,38 48,42 50,48 45,44 40,48 42,42 37,38 42,37" fill="#f472b6" stroke="#fef08a" strokeWidth="1" />
+        </>
+      )}
+      {blockId === 'pony_rainbow' && (
+        <>
+          {/* Top face rainbow stripes */}
+          <line x1="18" y1="16" x2="44" y2="16" stroke="#ef4444" strokeWidth="2.5" />
+          <line x1="16" y1="19" x2="48" y2="19" stroke="#facc15" strokeWidth="2.5" />
+          <line x1="20" y1="22" x2="44" y2="22" stroke="#22c55e" strokeWidth="2.5" />
+          {/* Left face: Rainbow Dash mane & eyes */}
+          <polygon points="10,23 28,32 28,36 10,27" fill="#ef4444" />
+          <polygon points="10,27 28,36 28,39 10,30" fill="#facc15" />
+          <polygon points="10,30 28,39 28,42 10,33" fill="#22c55e" />
+          <circle cx="15" cy="40" r="2.6" fill="#ffffff" />
+          <circle cx="15.5" cy="40" r="1.4" fill="#be185d" />
+          <circle cx="24" cy="44" r="2.6" fill="#ffffff" />
+          <circle cx="24.5" cy="44" r="1.4" fill="#be185d" />
+          {/* Right face: Cloud & Rainbow Lightning Cutie Mark */}
+          <ellipse cx="45" cy="35" rx="6" ry="3.5" fill="#ffffff" />
+          <polygon points="46,37 41,44 45,44 42,51 50,42 46,42" fill="#facc15" stroke="#ef4444" strokeWidth="0.8" />
+        </>
+      )}
+      {blockId === 'pony_pinkie' && (
+        <>
+          {/* Top face sparkle heart */}
+          <polygon points="32,12 42,18 32,26 22,18" fill="#fef08a" opacity="0.85" />
+          {/* Left face: Fluffy hot-pink mane & cheerful eyes */}
+          <circle cx="14" cy="26" r="4" fill="#db2777" />
+          <circle cx="20" cy="29" r="4.5" fill="#db2777" />
+          <circle cx="26" cy="32" r="4" fill="#db2777" />
+          <circle cx="15" cy="39" r="2.6" fill="#ffffff" />
+          <circle cx="15.5" cy="39" r="1.4" fill="#0284c7" />
+          <circle cx="24" cy="43" r="2.6" fill="#ffffff" />
+          <circle cx="24.5" cy="43" r="1.4" fill="#0284c7" />
+          {/* Right face: 3 Party Balloons Cutie Mark */}
+          <circle cx="41" cy="36" r="3.5" fill="#38bdf8" />
+          <circle cx="48" cy="34" r="3.5" fill="#facc15" />
+          <circle cx="45" cy="41" r="3.5" fill="#38bdf8" />
+          <line x1="41" y1="39.5" x2="45" y2="50" stroke="#fef08a" strokeWidth="1.2" />
+          <line x1="48" y1="37.5" x2="45" y2="50" stroke="#fef08a" strokeWidth="1.2" />
+        </>
+      )}
     </svg>
   );
 };

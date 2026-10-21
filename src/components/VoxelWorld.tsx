@@ -51,8 +51,10 @@ const HERO_LINES = [
 
 interface VoxelWorldProps {
   state: PlayerState;
+  dailyWorldMinutes?: number;
   onUpdateWorld: (placedBlocks: PlacedBlock[], blocksInventory: Record<BlockId, number>) => void;
   onUpdateState: (partial: Partial<PlayerState>) => void;
+  onNavigateToQuests?: () => void;
 }
 
 // Procedural 16x16 Minecraft-style Pixel Texture Generator
@@ -133,6 +135,152 @@ function createPixelBlockTexture(blockId: BlockId, isTopFace = false): THREE.Can
       ctx.fillStyle = colors[(i + 2) % colors.length];
       ctx.fillRect(2 + i * 2, 10, 2, 4);
     }
+  } else if (blockId === 'pony_twilight') {
+    // Glowing golden/lavender magical frame
+    ctx.fillStyle = '#fae8ff';
+    ctx.fillRect(1, 1, 14, 1);
+    ctx.fillRect(1, 14, 14, 1);
+    ctx.fillRect(1, 1, 1, 14);
+    ctx.fillRect(14, 1, 1, 14);
+    if (isTopFace) {
+      // Twilight Sparkle 6-pointed pink star cutie mark + white sparkles
+      ctx.fillStyle = '#ec4899';
+      ctx.fillRect(6, 4, 4, 8);
+      ctx.fillRect(4, 6, 8, 4);
+      ctx.fillStyle = '#f472b6';
+      ctx.fillRect(7, 3, 2, 10);
+      ctx.fillRect(3, 7, 10, 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(7, 7, 2, 2);
+      ctx.fillRect(3, 3, 1, 1);
+      ctx.fillRect(12, 3, 1, 1);
+      ctx.fillRect(3, 12, 1, 1);
+      ctx.fillRect(12, 12, 1, 1);
+    } else {
+      // Cute pixel Twilight Sparkle pony portrait + cutie mark star
+      // Mane (dark indigo + pink + purple stripes)
+      ctx.fillStyle = '#1e1b4b';
+      ctx.fillRect(2, 3, 10, 3);
+      ctx.fillRect(2, 5, 2, 6);
+      ctx.fillStyle = '#ec4899';
+      ctx.fillRect(4, 3, 3, 3);
+      ctx.fillStyle = '#7e22ce';
+      ctx.fillRect(7, 3, 3, 3);
+      // Unicorn Horn (glowing gold/lavender)
+      ctx.fillStyle = '#fef08a';
+      ctx.fillRect(7, 1, 2, 3);
+      // Pony Face (lavender)
+      ctx.fillStyle = '#d8b4fe';
+      ctx.fillRect(4, 6, 8, 7);
+      // Big sparkling purple eyes
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(4, 7, 3, 3);
+      ctx.fillRect(9, 7, 3, 3);
+      ctx.fillStyle = '#581c87';
+      ctx.fillRect(5, 8, 2, 2);
+      ctx.fillRect(10, 8, 2, 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(5, 8, 1, 1);
+      ctx.fillRect(10, 8, 1, 1);
+      // Cute muzzle & pink star
+      ctx.fillStyle = '#f472b6';
+      ctx.fillRect(7, 11, 2, 1);
+      ctx.fillRect(12, 11, 2, 2);
+    }
+  } else if (blockId === 'pony_rainbow') {
+    // Glowing sky-cyan magical frame
+    ctx.fillStyle = '#e0f2fe';
+    ctx.fillRect(1, 1, 14, 1);
+    ctx.fillRect(1, 14, 14, 1);
+    ctx.fillRect(1, 1, 1, 14);
+    ctx.fillRect(14, 1, 1, 14);
+    if (isTopFace) {
+      // Rainbow Dash rainbow spectrum diagonal/stripes
+      const rainbow = ['#ef4444', '#f97316', '#facc15', '#22c55e', '#3b82f6', '#a855f7'];
+      for (let i = 0; i < 6; i++) {
+        ctx.fillStyle = rainbow[i];
+        ctx.fillRect(2, 2 + i * 2, 12, 2);
+      }
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(6, 6, 4, 4);
+    } else {
+      // Cute pixel Rainbow Dash portrait + rainbow mane + cloud lightning
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(2, 2, 4, 2);
+      ctx.fillStyle = '#f97316';
+      ctx.fillRect(6, 2, 3, 2);
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(9, 2, 4, 2);
+      ctx.fillStyle = '#22c55e';
+      ctx.fillRect(2, 4, 6, 2);
+      ctx.fillStyle = '#3b82f6';
+      ctx.fillRect(8, 4, 5, 2);
+      // Sky blue face
+      ctx.fillStyle = '#7dd3fc';
+      ctx.fillRect(3, 6, 8, 7);
+      // Magenta eyes
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(4, 7, 3, 3);
+      ctx.fillRect(8, 7, 3, 3);
+      ctx.fillStyle = '#be185d';
+      ctx.fillRect(5, 8, 2, 2);
+      ctx.fillRect(9, 8, 2, 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(5, 8, 1, 1);
+      ctx.fillRect(9, 8, 1, 1);
+      // White cloud + lightning cutie mark on side
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(11, 9, 3, 2);
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(12, 11, 2, 3);
+    }
+  } else if (blockId === 'pony_pinkie') {
+    // Glowing sweet pink-gold magical frame
+    ctx.fillStyle = '#fce7f3';
+    ctx.fillRect(1, 1, 14, 1);
+    ctx.fillRect(1, 14, 14, 1);
+    ctx.fillRect(1, 1, 1, 14);
+    ctx.fillRect(14, 1, 1, 14);
+    if (isTopFace) {
+      // Pinkie Pie party balloons cutie mark on top
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(3, 4, 4, 4);
+      ctx.fillRect(9, 5, 4, 4);
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(6, 3, 4, 4);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(5, 8, 1, 5);
+      ctx.fillRect(8, 7, 1, 6);
+      ctx.fillRect(11, 9, 1, 4);
+    } else {
+      // Cute pixel Pinkie Pie portrait + fluffy hot-pink curls + party balloons
+      ctx.fillStyle = '#db2777';
+      ctx.fillRect(2, 2, 11, 4);
+      ctx.fillRect(2, 6, 2, 5);
+      ctx.fillStyle = '#f472b6';
+      ctx.fillRect(4, 3, 3, 2);
+      ctx.fillRect(9, 3, 3, 2);
+      // Pastel pink face
+      ctx.fillStyle = '#fbcfe8';
+      ctx.fillRect(4, 6, 8, 7);
+      // Bright sky-blue eyes
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(4, 7, 3, 3);
+      ctx.fillRect(9, 7, 3, 3);
+      ctx.fillStyle = '#0284c7';
+      ctx.fillRect(5, 8, 2, 2);
+      ctx.fillRect(10, 8, 2, 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(5, 8, 1, 1);
+      ctx.fillRect(10, 8, 1, 1);
+      // Big cheerful smile + yellow/blue balloon mark
+      ctx.fillStyle = '#db2777';
+      ctx.fillRect(6, 11, 4, 1);
+      ctx.fillStyle = '#facc15';
+      ctx.fillRect(12, 10, 2, 2);
+      ctx.fillStyle = '#38bdf8';
+      ctx.fillRect(12, 12, 2, 2);
+    }
   }
 
   // Crisp pixel border
@@ -149,8 +297,10 @@ function createPixelBlockTexture(blockId: BlockId, isTopFace = false): THREE.Can
 
 export const VoxelWorld: React.FC<VoxelWorldProps> = ({
   state,
+  dailyWorldMinutes = 60,
   onUpdateWorld,
   onUpdateState,
+  onNavigateToQuests,
 }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const [selectedBlock, setSelectedBlock] = useState<BlockId>('oak_planks');
@@ -158,6 +308,57 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
   const [timeOfDay, setTimeOfDay] = useState<'day' | 'sunset' | 'night'>('day');
   const [activeBlueprintId, setActiveBlueprintId] = useState<string>('');
   const [expandModalOpen, setExpandModalOpen] = useState<boolean>(false);
+
+  // Daily play time tracking in seconds
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [playedSeconds, setPlayedSeconds] = useState<number>(() =>
+    state.worldPlayDate === todayStr ? state.worldPlaySecondsToday || 0 : 0
+  );
+  const playedSecondsRef = useRef<number>(playedSeconds);
+  playedSecondsRef.current = playedSeconds;
+
+  const limitSeconds = Math.max(0, Math.round(dailyWorldMinutes * 60));
+  const isTimeLocked = limitSeconds > 0 && playedSeconds >= limitSeconds;
+  const isTimeLockedRef = useRef<boolean>(isTimeLocked);
+  isTimeLockedRef.current = isTimeLocked;
+
+  // Sync if parent resets or updates worldPlaySecondsToday from Parent Console
+  useEffect(() => {
+    const incoming = state.worldPlayDate === todayStr ? state.worldPlaySecondsToday || 0 : 0;
+    if (Math.abs(incoming - playedSecondsRef.current) >= 5 || incoming === 0) {
+      setPlayedSeconds(incoming);
+    }
+  }, [state.worldPlaySecondsToday, state.worldPlayDate, todayStr]);
+
+  // 1-second play timer while VoxelWorld screen is active
+  useEffect(() => {
+    if (limitSeconds > 0 && playedSecondsRef.current >= limitSeconds) {
+      return;
+    }
+    const timer = setInterval(() => {
+      if (isTimeLockedRef.current) return;
+      setPlayedSeconds((prev) => {
+        const next = prev + 1;
+        playedSecondsRef.current = next;
+        if (next % 10 === 0 || (limitSeconds > 0 && next >= limitSeconds)) {
+          onUpdateState({
+            worldPlaySecondsToday: next,
+            worldPlayDate: todayStr,
+          });
+        }
+        return next;
+      });
+    }, 1000);
+
+    return () => {
+      clearInterval(timer);
+      onUpdateState({
+        worldPlaySecondsToday: playedSecondsRef.current,
+        worldPlayDate: todayStr,
+      });
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [limitSeconds, todayStr]);
 
   // Camera orbit + pan target
   const [cameraAngle, setCameraAngle] = useState<number>(Math.PI / 4);
@@ -217,16 +418,27 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
     const meta = BLOCK_CATALOG[blockId] || BLOCK_CATALOG.grass;
     const topTex = createPixelBlockTexture(blockId, true);
     const sideTex = createPixelBlockTexture(blockId, false);
+    const isPonyBlock = blockId.startsWith('pony_');
 
     const commonProps: THREE.MeshLambertMaterialParameters = {
       transparent: Boolean(meta.transparent),
       opacity: meta.transparent ? 0.78 : 1.0,
-      emissive: meta.emissive ? new THREE.Color('#f59e0b') : new THREE.Color('#000000'),
-      emissiveIntensity: meta.emissive ? 0.65 : 0,
+      emissive: meta.emissive
+        ? new THREE.Color(isPonyBlock ? '#ffffff' : meta.emissiveColor || '#f59e0b')
+        : new THREE.Color('#000000'),
+      emissiveIntensity: meta.emissive ? (isPonyBlock ? 0.75 : 0.65) : 0,
     };
 
-    const sideMat = new THREE.MeshLambertMaterial({ ...commonProps, map: sideTex });
-    const topMat = new THREE.MeshLambertMaterial({ ...commonProps, map: topTex });
+    const sideMat = new THREE.MeshLambertMaterial({
+      ...commonProps,
+      map: sideTex,
+      emissiveMap: isPonyBlock ? sideTex : null,
+    });
+    const topMat = new THREE.MeshLambertMaterial({
+      ...commonProps,
+      map: topTex,
+      emissiveMap: isPonyBlock ? topTex : null,
+    });
 
     const matArray = [sideMat, sideMat, topMat, sideMat, sideMat, sideMat];
     materialsCacheRef.current[blockId] = matArray;
@@ -317,6 +529,10 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
 
       // If pointer barely moved, treat as a Tap / Click to place or mine block!
       if (movedDistance < 12) {
+        if (isTimeLockedRef.current) {
+          showToast('⏳ 今日《我的世界》游玩时间已到啦！休息一下眼睛，明天再来建造吧！');
+          return;
+        }
         const rect = renderer.domElement.getBoundingClientRect();
         mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
         mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -530,9 +746,10 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
       blocksGroup.add(mesh);
 
       // Cap real dynamic PointLights at 8 to keep WebGL shader uniform limits safe on iPad
-      if (BLOCK_CATALOG[b.type]?.emissive && pointLightCount < 8) {
+      const blockMeta = BLOCK_CATALOG[b.type];
+      if (blockMeta?.emissive && pointLightCount < 8) {
         pointLightCount++;
-        const light = new THREE.PointLight(0xfde047, 1.8, 7);
+        const light = new THREE.PointLight(blockMeta.emissiveColor || 0xfde047, 1.9, 7.5);
         light.position.set(b.x, b.y + 0.2, b.z);
         blocksGroup.add(light);
       }
@@ -596,6 +813,7 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
     activePetId: activePet?.id,
     activePetName: activePet?.name,
     name: state.childName,
+    gender: state.childGender,
   });
 
   // (Re)build character meshes when gear / pets change, preserving positions
@@ -974,6 +1192,9 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
   };
 
   const activeBlueprint = BLUEPRINTS.find((b) => b.id === activeBlueprintId);
+  const remainingSeconds = Math.max(0, limitSeconds - playedSeconds);
+  const remMins = Math.floor(remainingSeconds / 60);
+  const remSecs = remainingSeconds % 60;
 
   return (
     <div className="h-full flex flex-col lg:flex-row overflow-hidden relative">
@@ -983,8 +1204,22 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
 
         {/* Top Floating Controls Overlay */}
         <div className="absolute top-3 left-3 right-3 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
-          {/* Left Group: Build/Mine Mode + Territory Expansion Button */}
+          {/* Left Group: Build/Mine Mode + Territory Expansion Button + Daily Timer Badge */}
           <div className="flex flex-wrap items-center gap-2 pointer-events-auto">
+            {limitSeconds > 0 && (
+              <div
+                className={`px-3 py-2 rounded-xl border-2 font-black text-xs sm:text-sm flex items-center gap-1.5 shadow-mc ${
+                  isTimeLocked
+                    ? 'bg-rose-600 text-white border-black animate-pulse'
+                    : remainingSeconds <= 300
+                    ? 'bg-amber-400 text-zinc-950 border-black'
+                    : 'bg-black/80 text-lime-300 border-white/25'
+                }`}
+                title="每日《我的世界》限时保护眼睛（可在 .env 或家长控制面板调整）"
+              >
+                <span>⏳ 今日建造剩余：{remMins}分{String(remSecs).padStart(2, '0')}秒</span>
+              </div>
+            )}
             <div className="flex items-center gap-1.5 bg-black/75 backdrop-blur-md p-1.5 rounded-xl border-2 border-white/20">
               <button
                 onClick={() => {
@@ -1425,6 +1660,39 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
                 );
               })}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Daily Play Time Limit Lock Overlay */}
+      {isTimeLocked && (
+        <div className="fixed inset-0 z-40 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="mc-panel w-full max-w-md rounded-2xl p-6 text-center space-y-4 border-4 border-amber-400">
+            <div className="text-5xl">⏳👀</div>
+            <h2 className="text-xl sm:text-2xl font-black text-amber-300">
+              今日《我的世界》{dailyWorldMinutes}分钟时间到啦！
+            </h2>
+            <p className="text-sm text-zinc-200 leading-relaxed">
+              小矿工 <strong>{state.childName}</strong>，今天你已经在方块世界里愉快建造满{' '}
+              <strong className="text-lime-300">{dailyWorldMinutes} 分钟</strong> 啦！
+              <br />
+              为了保护亮晶晶的眼睛，请远眺窗外绿树休息一下，明天会自动恢复满满的建造时间哦！
+            </p>
+            <div className="p-3 rounded-xl bg-black/45 border border-white/15 text-xs text-zinc-300">
+              💡 家长提示：如需调整每日时长上限（默认 60 分钟）或今日奖励加时，可在右上角【家长】面板或{' '}
+              <code>.env</code> 的 <code>DAILY_WORLD_MINUTES</code> 中设置。
+            </div>
+            {onNavigateToQuests && (
+              <button
+                onClick={() => {
+                  sound.playClick();
+                  onNavigateToQuests();
+                }}
+                className="w-full py-3 rounded-xl bg-gradient-to-b from-amber-400 to-amber-500 hover:brightness-110 text-zinc-950 font-black text-base border-2 border-black shadow-mc"
+              >
+                📅 返回作业闯关岛
+              </button>
+            )}
           </div>
         </div>
       )}

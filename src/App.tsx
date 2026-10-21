@@ -42,6 +42,9 @@ const FALLBACK_INITIAL_STATE: PlayerState = {
     diamond_block: 0,
     glowstone: 1,
     tnt: 0,
+    pony_twilight: 0,
+    pony_rainbow: 0,
+    pony_pinkie: 0,
   },
   foodsInventory: {
     bone: 3,
@@ -76,6 +79,8 @@ const FALLBACK_INITIAL_STATE: PlayerState = {
   ],
   worldTheme: 'plains',
   worldSizeLevel: 1,
+  worldPlaySecondsToday: 0,
+  worldPlayDate: new Date().toISOString().slice(0, 10),
   submissions: [],
   wishes: [
     { id: 'wish_mc_time', title: '周末玩30分钟《我的世界》', priceEmeralds: 60, emoji: '🎮', redeemedCount: 0 },
@@ -91,6 +96,7 @@ const FALLBACK_SETTINGS: AppSettings = {
   openaiModel: 'gpt-4o',
   childName: '小矿工淇淇',
   parentPin: '1234',
+  dailyWorldMinutes: 60,
   voiceEnabled: true,
   soundEnabled: true,
 };
@@ -130,8 +136,7 @@ export const App: React.FC = () => {
 
   // Persist state changes to backend
   const handleUpdateState = (partial: Partial<PlayerState>) => {
-    const nextState = { ...state, ...partial };
-    setState(nextState);
+    setState((prev) => ({ ...prev, ...partial }));
     fetch('/api/state', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -221,8 +226,10 @@ export const App: React.FC = () => {
         {activeTab === 'world' && (
           <VoxelWorld
             state={state}
+            dailyWorldMinutes={settings.dailyWorldMinutes ?? 60}
             onUpdateWorld={handleUpdateWorld}
             onUpdateState={handleUpdateState}
+            onNavigateToQuests={() => setActiveTab('quests')}
           />
         )}
         {activeTab === 'pets' && (

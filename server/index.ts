@@ -43,6 +43,7 @@ interface ServerSettings {
   childName: string;
   childGender: 'boy' | 'girl';
   parentPin: string;
+  dailyWorldMinutes: number;
   voiceEnabled: boolean;
   soundEnabled: boolean;
 }
@@ -89,6 +90,14 @@ function loadSettings(): ServerSettings {
     console.error('Failed to load settings file:', e);
   }
 
+  const rawDailyMinutes = Number(
+    process.env.DAILY_WORLD_MINUTES !== undefined
+      ? process.env.DAILY_WORLD_MINUTES
+      : localOverrides.dailyWorldMinutes !== undefined
+      ? localOverrides.dailyWorldMinutes
+      : 60
+  );
+
   return {
     openaiApiKey: process.env.OPENAI_API_KEY || localOverrides.openaiApiKey || '',
     openaiBaseUrl: process.env.OPENAI_BASE_URL || localOverrides.openaiBaseUrl || 'https://api.openai.com/v1',
@@ -96,6 +105,7 @@ function loadSettings(): ServerSettings {
     parentPin: process.env.PARENT_PIN || localOverrides.parentPin || '1234',
     childName: process.env.CHILD_NAME || localOverrides.childName || '小矿工淇淇',
     childGender: (process.env.CHILD_GENDER || localOverrides.childGender || 'boy') as 'boy' | 'girl',
+    dailyWorldMinutes: Number.isFinite(rawDailyMinutes) && rawDailyMinutes >= 0 ? rawDailyMinutes : 60,
     voiceEnabled: localOverrides.voiceEnabled !== undefined ? localOverrides.voiceEnabled : true,
     soundEnabled: localOverrides.soundEnabled !== undefined ? localOverrides.soundEnabled : true,
   };
@@ -132,6 +142,9 @@ function getInitialPlayerState(): PlayerState {
       diamond_block: 0,
       glowstone: 1,
       tnt: 0,
+      pony_twilight: 0,
+      pony_rainbow: 0,
+      pony_pinkie: 0,
     },
     foodsInventory: {
       bone: 3,
@@ -167,6 +180,8 @@ function getInitialPlayerState(): PlayerState {
     ],
     worldTheme: 'plains',
     worldSizeLevel: 1,
+    worldPlaySecondsToday: 0,
+    worldPlayDate: today,
     submissions: [],
     wishes: [
       { id: 'wish_mc_time', title: '周末玩30分钟《我的世界》', priceEmeralds: 60, emoji: '🎮', redeemedCount: 0 },
@@ -179,12 +194,26 @@ function getInitialPlayerState(): PlayerState {
 
 function loadState(): PlayerState {
   const settings = loadSettings();
+  const today = new Date().toISOString().slice(0, 10);
   const effectiveName = settings.childName || process.env.CHILD_NAME || '小矿工淇淇';
   const effectiveGender = settings.childGender || process.env.CHILD_GENDER || 'boy';
   try {
     if (fs.existsSync(STATE_FILE)) {
       const raw = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
-      const state: PlayerState = { ...getInitialPlayerState(), ...raw };
+      const initial = getInitialPlayerState();
+      const state: PlayerState = {
+        ...initial,
+        ...raw,
+        blocksInventory: {
+          ...initial.blocksInventory,
+          ...(raw.blocksInventory || {}),
+        },
+      };
+      // Reset daily My World play timer on a new date
+      if (state.worldPlayDate !== today) {
+        state.worldPlayDate = today;
+        state.worldPlaySecondsToday = 0;
+      }
       // Always sync childName and childGender from .env / settings, and migrate any old '奇奇' to '淇淇'
       if (effectiveName) {
         state.childName = effectiveName;
@@ -245,6 +274,7 @@ app.get('/api/state', (_req, res) => {
       childName: settings.childName,
       childGender: settings.childGender,
       parentPin: settings.parentPin,
+      dailyWorldMinutes: settings.dailyWorldMinutes,
       voiceEnabled: settings.voiceEnabled,
       soundEnabled: settings.soundEnabled,
     },
@@ -265,7 +295,17 @@ app.post('/api/state', (req, res) => {
 // POST /api/settings
 app.post('/api/settings', (req, res) => {
   const current = loadSettings();
-  const { openaiApiKey, openaiBaseUrl, openaiModel, childName, childGender, parentPin, voiceEnabled, soundEnabled } = req.body;
+  const {
+    openaiApiKey,
+    openaiBaseUrl,
+    openaiModel,
+    childName,
+    childGender,
+    parentPin,
+    dailyWorldMinutes,
+    voiceEnabled,
+    soundEnabled,
+  } = req.body;
 
   const envUpdates: Record<string, string> = {};
   if (typeof openaiApiKey === 'string' && openaiApiKey.trim() !== '') {
@@ -285,6 +325,9 @@ app.post('/api/settings', (req, res) => {
   }
   if (childGender !== undefined && (childGender === 'boy' || childGender === 'girl')) {
     envUpdates.CHILD_GENDER = childGender;
+  }
+  if (dailyWorldMinutes !== undefined && Number.isFinite(Number(dailyWorldMinutes)) && Number(dailyWorldMinutes) >= 0) {
+    envUpdates.DAILY_WORLD_MINUTES = String(Math.round(Number(dailyWorldMinutes)));
   }
 
   if (Object.keys(envUpdates).length > 0) {
@@ -319,6 +362,7 @@ app.post('/api/settings', (req, res) => {
       childName: updated.childName,
       childGender: updated.childGender,
       parentPin: updated.parentPin,
+      dailyWorldMinutes: updated.dailyWorldMinutes,
       voiceEnabled: updated.voiceEnabled,
       soundEnabled: updated.soundEnabled,
     },
@@ -568,14 +612,14 @@ app.post('/api/homework/submit', async (req, res) => {
 
     const droppedBlocks: Record<string, number> = {};
     const pool: BlockId[] = [...task.dropBlockPool, 'oak_planks', 'cobblestone', 'brick'];
-    const pickCount = aiCore.grade === 'S' ? 3 : 2;
+    const pickCount = aiCore.grade === 'S' ? 2 : 1;
     for (let i = 0; i < pickCount; i++) {
       const b = pool[i % pool.length];
-      const qty = Math.max(2, Math.round((6 + (i === 0 ? 4 : 2)) * mult));
+      const qty = Math.max(1, Math.round((i === 0 ? 2 : 1) * mult));
       droppedBlocks[b] = (droppedBlocks[b] || 0) + qty;
     }
     if (aiCore.grade === 'S') {
-      droppedBlocks['diamond_block'] = (droppedBlocks['diamond_block'] || 0) + 2;
+      droppedBlocks['diamond_block'] = (droppedBlocks['diamond_block'] || 0) + 1;
     }
 
     const droppedFoods: Record<string, number> = {

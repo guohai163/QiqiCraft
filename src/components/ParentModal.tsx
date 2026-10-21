@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Lock, Key, Plus, RotateCcw, Gift, Trash2, CheckCircle2, Image as ImageIcon } from 'lucide-react';
-import { AppSettings, HomeworkTask, PlayerState, SubjectType } from '../types/game';
-import { SUBJECT_META } from '../data/catalog';
+import { Lock, Key, Plus, RotateCcw, Gift, Trash2, CheckCircle2, Image as ImageIcon, Sparkles, Clock } from 'lucide-react';
+import { AppSettings, BlockId, HomeworkTask, PlayerState, SubjectType } from '../types/game';
+import { BLOCK_CATALOG, SUBJECT_META } from '../data/catalog';
+import { BlockCubeIcon } from './PixelVisuals';
 import { sound } from '../utils/sound';
 
 interface ParentModalProps {
@@ -33,6 +34,7 @@ export const ParentModal: React.FC<ParentModalProps> = ({
   const [childName, setChildName] = useState(settings.childName || state.childName);
   const [childGender, setChildGender] = useState(settings.childGender || state.childGender || 'boy');
   const [parentPin, setParentPin] = useState(settings.parentPin || '1234');
+  const [dailyWorldMinutes, setDailyWorldMinutes] = useState<number>(settings.dailyWorldMinutes ?? 60);
   const [saveSuccess, setSaveSuccess] = useState('');
 
   // New Task Form
@@ -66,6 +68,7 @@ export const ParentModal: React.FC<ParentModalProps> = ({
       childName: childName.trim(),
       childGender: childGender as 'boy' | 'girl',
       parentPin: parentPin.trim(),
+      dailyWorldMinutes: Math.max(0, Number(dailyWorldMinutes) || 0),
     });
     setApiKey('');
     setSaveSuccess('✅ 配置已保存并自动同步写入 .env 配置文件！');
@@ -125,6 +128,43 @@ export const ParentModal: React.FC<ParentModalProps> = ({
       },
     });
     setSaveSuccess('🎁 已手动为小朋友发放【家长表扬大礼包】（+25绿宝石、+5钻石块、+5金块、+2金苹果）！');
+    setTimeout(() => setSaveSuccess(''), 3000);
+  };
+
+  const handleGrantSpecialBlock = (blockId: BlockId, count: number) => {
+    sound.playChestFanfare();
+    const meta = BLOCK_CATALOG[blockId];
+    onUpdateState({
+      blocksInventory: {
+        ...state.blocksInventory,
+        [blockId]: (state.blocksInventory[blockId] || 0) + count,
+      },
+    });
+    setSaveSuccess(`🦄 已成功为小朋友发放特殊发光砖块：【${meta.name} +${count}】！`);
+    setTimeout(() => setSaveSuccess(''), 3000);
+  };
+
+  const handleGrantAllPonyBlocks = () => {
+    sound.playChestFanfare();
+    onUpdateState({
+      blocksInventory: {
+        ...state.blocksInventory,
+        pony_twilight: (state.blocksInventory.pony_twilight || 0) + 5,
+        pony_rainbow: (state.blocksInventory.pony_rainbow || 0) + 5,
+        pony_pinkie: (state.blocksInventory.pony_pinkie || 0) + 5,
+      },
+    });
+    setSaveSuccess('🦄✨ 已发放【小马宝莉发光砖全套大礼包】（紫悦+5、云宝+5、碧琪+5）！');
+    setTimeout(() => setSaveSuccess(''), 3000);
+  };
+
+  const handleResetWorldPlayTime = () => {
+    sound.playClick();
+    onUpdateState({
+      worldPlaySecondsToday: 0,
+      worldPlayDate: new Date().toISOString().slice(0, 10),
+    });
+    setSaveSuccess('⏳ 已将今日《我的世界》已玩时长清零，小朋友可重新获得完整建造时间！');
     setTimeout(() => setSaveSuccess(''), 3000);
   };
 
@@ -261,17 +301,33 @@ export const ParentModal: React.FC<ParentModalProps> = ({
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-amber-300 mb-1">
-                      🔐 家长控制台密码 (PARENT_PIN)：
-                    </label>
-                    <input
-                      type="text"
-                      value={parentPin}
-                      onChange={(e) => setParentPin(e.target.value)}
-                      placeholder="默认 1234"
-                      className="w-full px-3.5 py-2 rounded-xl bg-black border border-zinc-700 text-amber-300 font-mono text-sm"
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-amber-300 mb-1">
+                        🔐 家长密码 (PARENT_PIN)：
+                      </label>
+                      <input
+                        type="text"
+                        value={parentPin}
+                        onChange={(e) => setParentPin(e.target.value)}
+                        placeholder="默认 1234"
+                        className="w-full px-3.5 py-2 rounded-xl bg-black border border-zinc-700 text-amber-300 font-mono text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-lime-300 mb-1">
+                        ⏳ 每日限时(分, DAILY_WORLD_MINUTES)：
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={600}
+                        value={dailyWorldMinutes}
+                        onChange={(e) => setDailyWorldMinutes(Math.max(0, Number(e.target.value) || 0))}
+                        placeholder="默认 60"
+                        className="w-full px-3.5 py-2 rounded-xl bg-black border border-zinc-700 text-lime-300 font-mono text-sm"
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -342,24 +398,96 @@ export const ParentModal: React.FC<ParentModalProps> = ({
             {activeTab === 'tasks' && (
               <div className="space-y-5">
                 {/* Quick Actions */}
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-2.5">
                   <button
                     type="button"
                     onClick={handleResetDailyTasks}
-                    className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-black text-xs flex items-center gap-1.5"
+                    className="px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-black text-xs flex items-center gap-1.5"
                   >
                     <RotateCcw className="w-4 h-4" />
-                    <span>开启新一天（重置今日作业完成格数）</span>
+                    <span>开启新一天（重置今日作业格数）</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={handleGrantParentBonus}
-                    className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black text-xs flex items-center gap-1.5"
+                    className="px-3.5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black text-xs flex items-center gap-1.5"
                   >
                     <Gift className="w-4 h-4" />
-                    <span>🎁 手动发【家长表扬大礼包】(+25绿宝石 & +5钻石块)</span>
+                    <span>🎁 发【家长表扬大礼包】(+25绿宝石 & +5钻石块)</span>
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={handleResetWorldPlayTime}
+                    className="px-3.5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs flex items-center gap-1.5"
+                  >
+                    <Clock className="w-4 h-4" />
+                    <span>
+                      ⏳ 重置今日《我的世界》时长 (已玩 {Math.floor((state.worldPlaySecondsToday || 0) / 60)} 分钟 / 限{' '}
+                      {settings.dailyWorldMinutes ?? 60} 分钟)
+                    </span>
+                  </button>
+                </div>
+
+                {/* Special Glowing My Little Pony Blocks Section */}
+                <div className="p-4 rounded-xl bg-gradient-to-r from-purple-950/80 via-fuchsia-950/75 to-pink-950/80 border-2 border-fuchsia-400/50 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-black text-fuchsia-200 flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-amber-300" />
+                        <span>🦄 发放特殊发光砖块（小马宝莉限定系列 · 夜晚自带彩光）</span>
+                      </div>
+                      <p className="text-xs text-fuchsia-300/80 mt-0.5">
+                        该系列仅限家长控制面板表扬发放，表面印有小马宝莉像素头像与可爱标志，在《我的世界》中会自己发光！
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleGrantAllPonyBlocks}
+                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-fuchsia-400 to-amber-300 hover:brightness-110 text-zinc-950 font-black text-xs border border-black shadow-mc shrink-0"
+                    >
+                      🎁 全套3款各发 +5 块
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    {(['pony_twilight', 'pony_rainbow', 'pony_pinkie'] as BlockId[]).map((bId) => {
+                      const meta = BLOCK_CATALOG[bId];
+                      return (
+                        <div
+                          key={bId}
+                          className="p-3 rounded-xl bg-black/50 border border-fuchsia-400/30 flex items-center justify-between gap-2"
+                        >
+                          <div className="flex items-center gap-2.5">
+                            <BlockCubeIcon blockId={bId} size={38} />
+                            <div>
+                              <div className="text-xs font-black text-white">{meta.name}</div>
+                              <div className="text-[11px] text-fuchsia-300">
+                                当前背包: {state.blocksInventory[bId] || 0} 块
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleGrantSpecialBlock(bId, 3)}
+                              className="px-2.5 py-1 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-black text-xs"
+                            >
+                              +3 块
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleGrantSpecialBlock(bId, 10)}
+                              className="px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-black text-xs"
+                            >
+                              +10 块
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Current Tasks List */}

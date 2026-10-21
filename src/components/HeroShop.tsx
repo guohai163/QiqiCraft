@@ -56,6 +56,11 @@ export const HeroShop: React.FC<HeroShopProps> = ({ state, onUpdateState }) => {
 
   const handleBuyBlockPack = (blockId: BlockId) => {
     const meta = BLOCK_CATALOG[blockId];
+    if (meta.parentOnly) {
+      sound.playClick();
+      setVillagerSpeech(`👑【${meta.name}】是爸爸妈妈专属发放的魔法发光砖块哦！表现超棒时请爸爸妈妈在右上角【家长】面板里奖励给你吧！`);
+      return;
+    }
     if (state.emeralds < meta.priceEmeralds) {
       sound.playClick();
       setVillagerSpeech(`💎 绿宝石不够兑换【${meta.name} x8】哦！`);
@@ -302,15 +307,23 @@ export const HeroShop: React.FC<HeroShopProps> = ({ state, onUpdateState }) => {
                       <div className="flex items-center gap-2">
                         <BlockCubeIcon blockId={bId} size={34} />
                         <div>
-                          <div className="text-xs font-black text-white">{meta.name} x8</div>
+                          <div className="text-xs font-black text-white">
+                            {meta.name} {meta.parentOnly ? '✨' : 'x8'}
+                          </div>
                           <div className="text-[10px] text-zinc-400">
                             拥有: {state.blocksInventory[bId] || 0}
                           </div>
                         </div>
                       </div>
-                      <span className="px-2 py-1 rounded bg-emerald-950 border border-emerald-400/40 text-emerald-300 font-black text-xs">
-                        💎{meta.priceEmeralds}
-                      </span>
+                      {meta.parentOnly ? (
+                        <span className="px-2 py-1 rounded bg-fuchsia-950 border border-fuchsia-400/50 text-fuchsia-300 font-black text-[10px] shrink-0">
+                          👑 家长发放
+                        </span>
+                      ) : (
+                        <span className="px-2 py-1 rounded bg-emerald-950 border border-emerald-400/40 text-emerald-300 font-black text-xs shrink-0">
+                          💎{meta.priceEmeralds}
+                        </span>
+                      )}
                     </button>
                   );
                 })}

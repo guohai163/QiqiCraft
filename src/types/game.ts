@@ -14,7 +14,10 @@ export type BlockId =
   | 'cherry_leaves'
   | 'tnt'
   | 'water'
-  | 'bookshelf';
+  | 'bookshelf'
+  | 'pony_twilight'
+  | 'pony_rainbow'
+  | 'pony_pinkie';
 
 export type FoodId = 'bone' | 'fish' | 'sweet_berries' | 'bamboo' | 'golden_apple';
 
@@ -30,6 +33,8 @@ export interface BlockMeta {
   sideColor: string;
   accentColor: string;
   emissive?: boolean;
+  emissiveColor?: string;
+  parentOnly?: boolean;
   transparent?: boolean;
   priceEmeralds: number;
   description: string;
@@ -139,6 +144,7 @@ export interface AppSettings {
   openaiModel: string;
   childName: string;
   childGender: 'boy' | 'girl';
+  dailyWorldMinutes: number;
   parentPin: string;
   voiceEnabled: boolean;
   soundEnabled: boolean;
@@ -159,6 +165,8 @@ export interface WorldExpansionTier {
 export interface PlayerState {
   childName: string;
   childGender: 'boy' | 'girl';
+  worldPlaySecondsToday?: number;
+  worldPlayDate?: string;
   level: number;
   xp: number;
   emeralds: number;
