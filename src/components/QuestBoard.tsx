@@ -5,6 +5,7 @@ import { BLOCK_CATALOG, FOOD_CATALOG, SUBJECT_META } from '../data/catalog';
 import { BlockCubeIcon } from './PixelVisuals';
 import { sound } from '../utils/sound';
 import { generateSampleHomeworkImage } from '../utils/demoPhoto';
+import { compressHomeworkImage } from '../utils/imageCompress';
 
 interface QuestBoardProps {
   state: PlayerState;
@@ -72,18 +73,19 @@ export const QuestBoard: React.FC<QuestBoardProps> = ({
     setTimerFinished(false);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setPreviewImage(reader.result);
-        setIsDemoSample(false);
-        sound.playPlaceBlock();
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressedDataUrl = await compressHomeworkImage(file, 1280, 0.78);
+      setPreviewImage(compressedDataUrl);
+      setIsDemoSample(false);
+      sound.playPlaceBlock();
+    } catch {
+      // ignore
+    } finally {
+      e.target.value = '';
+    }
   };
 
   const handleLoadSamplePhoto = () => {

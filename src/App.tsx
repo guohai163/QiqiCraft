@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { BookOpen, Castle, Cat, Shield } from 'lucide-react';
 import {
   AIReviewResult,
@@ -21,6 +21,7 @@ type NavTab = 'quests' | 'world' | 'pets' | 'shop';
 
 const FALLBACK_INITIAL_STATE: PlayerState = {
   childName: '小矿工淇淇',
+  childGender: 'boy',
   level: 1,
   xp: 20,
   emeralds: 25,
@@ -95,6 +96,7 @@ const FALLBACK_SETTINGS: AppSettings = {
   openaiBaseUrl: 'https://api.openai.com/v1',
   openaiModel: 'gpt-4o',
   childName: '小矿工淇淇',
+  childGender: 'boy',
   parentPin: '1234',
   dailyWorldMinutes: 60,
   voiceEnabled: true,
@@ -102,40 +104,60 @@ const FALLBACK_SETTINGS: AppSettings = {
 };
 
 export const App: React.FC = () => {
+  const isParentRoute =
+    typeof window !== 'undefined' &&
+    (window.location.pathname === '/parent' || window.location.pathname.startsWith('/parent/'));
+
   const [activeTab, setActiveTab] = useState<NavTab>('quests');
   const [state, setState] = useState<PlayerState>(FALLBACK_INITIAL_STATE);
   const [settings, setSettings] = useState<AppSettings>(FALLBACK_SETTINGS);
   const [latestReview, setLatestReview] = useState<AIReviewResult | null>(null);
-  const [parentModalOpen, setParentModalOpen] = useState(false);
+  const lastLocalMutationRef = useRef<number>(0);
 
-  // Load initial state from backend
-  useEffect(() => {
-    fetch('/api/state')
-      .then((r) => r.json())
-      .then((data) => {
-        const nextSettings = data?.settings;
-        let nextState = data?.state;
-        if (nextState) {
-          if (nextSettings?.childName) {
-            nextState.childName = nextSettings.childName;
-          } else if (nextState.childName && nextState.childName.includes('奇奇')) {
-            nextState.childName = nextState.childName.replace(/奇奇/g, '淇淇');
-          }
-          setState(nextState);
+  const fetchStateFromServer = useCallback(async (isBackgroundPoll = false) => {
+    try {
+      const r = await fetch('/api/state');
+      if (!r.ok) return;
+      const data = await r.json();
+      if (isBackgroundPoll && Date.now() - lastLocalMutationRef.current < 3500) {
+        return;
+      }
+      const nextSettings = data?.settings;
+      const nextState = data?.state;
+      if (nextState) {
+        if (nextSettings?.childName) {
+          nextState.childName = nextSettings.childName;
+        } else if (nextState.childName && nextState.childName.includes('奇奇')) {
+          nextState.childName = nextState.childName.replace(/奇奇/g, '淇淇');
         }
-        if (nextSettings) {
-          setSettings(nextSettings);
-          sound.soundEnabled = nextSettings.soundEnabled;
-          sound.voiceEnabled = nextSettings.voiceEnabled;
-        }
-      })
-      .catch((err) => {
+        setState(nextState);
+      }
+      if (nextSettings) {
+        setSettings(nextSettings);
+        sound.soundEnabled = nextSettings.soundEnabled;
+        sound.voiceEnabled = nextSettings.voiceEnabled;
+      }
+    } catch (err) {
+      if (!isBackgroundPoll) {
         console.warn('Using local fallback state:', err);
-      });
+      }
+    }
   }, []);
+
+  // Load initial state from backend & periodically sync changes between Parent Phone (/parent) and Child iPad
+  useEffect(() => {
+    fetchStateFromServer(false);
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        fetchStateFromServer(true);
+      }
+    }, 6000);
+    return () => clearInterval(interval);
+  }, [fetchStateFromServer]);
 
   // Persist state changes to backend
   const handleUpdateState = (partial: Partial<PlayerState>) => {
+    lastLocalMutationRef.current = Date.now();
     setState((prev) => ({ ...prev, ...partial }));
     fetch('/api/state', {
       method: 'POST',
@@ -154,6 +176,7 @@ export const App: React.FC = () => {
   const handleSaveSettings = async (
     payload: Partial<AppSettings> & { openaiApiKey?: string }
   ) => {
+    lastLocalMutationRef.current = Date.now();
     const res = await fetch('/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -186,6 +209,7 @@ export const App: React.FC = () => {
     sportsScore?: number;
     isDemoSample?: boolean;
   }): Promise<AIReviewResult | null> => {
+    lastLocalMutationRef.current = Date.now();
     const res = await fetch('/api/homework/submit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -202,15 +226,28 @@ export const App: React.FC = () => {
     return null;
   };
 
+  // Dedicated standalone Parent Console route (/parent) for parent's phone in portrait mode
+  if (isParentRoute) {
+    return (
+      <ParentModal
+        isStandalonePage
+        state={state}
+        settings={settings}
+        onSaveSettings={handleSaveSettings}
+        onUpdateState={handleUpdateState}
+        onRefresh={() => fetchStateFromServer(false)}
+      />
+    );
+  }
+
   const totalBlocks = Object.values(state.blocksInventory).reduce((a, b) => a + b, 0);
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-[#1e2618] text-white select-none overflow-hidden">
-      {/* Top Minecraft Status Bar */}
+    <div className="h-[100dvh] w-screen flex flex-col bg-[#1e2618] text-white select-none overflow-hidden">
+      {/* Top Minecraft Status Bar (Parent button removed for child UI) */}
       <TopStatusBar
         state={state}
         settings={settings}
-        onOpenParentModal={() => setParentModalOpen(true)}
         onToggleSound={handleToggleSound}
       />
 
@@ -240,8 +277,8 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* Bottom iPad Hotbar Navigation Dock */}
-      <nav className="bg-[#232d1b] border-t-4 border-[#11170c] px-4 py-2 flex items-center justify-around sm:justify-center sm:gap-5 z-20">
+      {/* Bottom iPad Hotbar Navigation Dock - Padded at bottom to clear iPadOS Home Indicator white bar */}
+      <nav className="bg-[#232d1b] border-t-4 border-[#11170c] px-4 pt-2 pb-[max(1.35rem,calc(env(safe-area-inset-bottom,0px)+0.65rem))] flex items-center justify-around sm:justify-center sm:gap-5 z-20 shrink-0">
         <button
           onClick={() => {
             sound.playClick();
@@ -311,16 +348,6 @@ export const App: React.FC = () => {
           setLatestReview(null);
           setActiveTab('world');
         }}
-      />
-
-      {/* Parent Settings & Photo History Modal */}
-      <ParentModal
-        isOpen={parentModalOpen}
-        onClose={() => setParentModalOpen(false)}
-        state={state}
-        settings={settings}
-        onSaveSettings={handleSaveSettings}
-        onUpdateState={handleUpdateState}
       />
     </div>
   );

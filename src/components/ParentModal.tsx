@@ -1,13 +1,28 @@
-import React, { useState } from 'react';
-import { Lock, Key, Plus, RotateCcw, Gift, Trash2, CheckCircle2, Image as ImageIcon, Sparkles, Clock } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  Lock,
+  Key,
+  Plus,
+  RotateCcw,
+  Gift,
+  Trash2,
+  CheckCircle2,
+  Image as ImageIcon,
+  Sparkles,
+  Clock,
+  RefreshCw,
+  X,
+} from 'lucide-react';
 import { AppSettings, BlockId, HomeworkTask, PlayerState, SubjectType } from '../types/game';
 import { BLOCK_CATALOG, SUBJECT_META } from '../data/catalog';
 import { BlockCubeIcon } from './PixelVisuals';
 import { sound } from '../utils/sound';
 
 interface ParentModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+  isOpen?: boolean;
+  isStandalonePage?: boolean;
+  onClose?: () => void;
+  onRefresh?: () => Promise<void>;
   state: PlayerState;
   settings: AppSettings;
   onSaveSettings: (payload: Partial<AppSettings> & { openaiApiKey?: string }) => Promise<void>;
@@ -15,8 +30,10 @@ interface ParentModalProps {
 }
 
 export const ParentModal: React.FC<ParentModalProps> = ({
-  isOpen,
+  isOpen = true,
+  isStandalonePage = false,
   onClose,
+  onRefresh,
   state,
   settings,
   onSaveSettings,
@@ -25,17 +42,33 @@ export const ParentModal: React.FC<ParentModalProps> = ({
   const [unlocked, setUnlocked] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
-  const [activeTab, setActiveTab] = useState<'ai' | 'tasks' | 'gallery'>('ai');
+  const [activeTab, setActiveTab] = useState<'tasks' | 'gallery' | 'ai'>('tasks');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
 
   // AI & Child config form
   const [apiKey, setApiKey] = useState('');
   const [baseUrl, setBaseUrl] = useState(settings.openaiBaseUrl || 'https://api.openai.com/v1');
   const [modelName, setModelName] = useState(settings.openaiModel || 'gpt-4o');
   const [childName, setChildName] = useState(settings.childName || state.childName);
-  const [childGender, setChildGender] = useState(settings.childGender || state.childGender || 'boy');
+  const [childGender, setChildGender] = useState<'boy' | 'girl'>(
+    settings.childGender || state.childGender || 'boy'
+  );
   const [parentPin, setParentPin] = useState(settings.parentPin || '1234');
-  const [dailyWorldMinutes, setDailyWorldMinutes] = useState<number>(settings.dailyWorldMinutes ?? 60);
+  const [dailyWorldMinutes, setDailyWorldMinutes] = useState<number>(
+    settings.dailyWorldMinutes ?? 60
+  );
   const [saveSuccess, setSaveSuccess] = useState('');
+
+  // Sync form state when backend settings finish loading
+  useEffect(() => {
+    setBaseUrl(settings.openaiBaseUrl || 'https://api.openai.com/v1');
+    setModelName(settings.openaiModel || 'gpt-4o');
+    setChildName(settings.childName || state.childName);
+    setChildGender(settings.childGender || state.childGender || 'boy');
+    setParentPin(settings.parentPin || '1234');
+    setDailyWorldMinutes(settings.dailyWorldMinutes ?? 60);
+  }, [settings, state.childName, state.childGender]);
 
   // New Task Form
   const [newTaskSubject, setNewTaskSubject] = useState<SubjectType>('chinese');
@@ -46,7 +79,24 @@ export const ParentModal: React.FC<ParentModalProps> = ({
   const [newWishTitle, setNewWishTitle] = useState('');
   const [newWishPrice, setNewWishPrice] = useState(50);
 
-  if (!isOpen) return null;
+  if (!isOpen && !isStandalonePage) return null;
+
+  const showToast = (msg: string) => {
+    setSaveSuccess(msg);
+    setTimeout(() => setSaveSuccess(''), 3000);
+  };
+
+  const handleManualRefresh = async () => {
+    if (!onRefresh) return;
+    setIsRefreshing(true);
+    sound.playClick();
+    try {
+      await onRefresh();
+      showToast('🔄 已同步孩子端最新数据！');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const handleVerifyPin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,6 +104,7 @@ export const ParentModal: React.FC<ParentModalProps> = ({
       setUnlocked(true);
       setPinError('');
       sound.playClick();
+      onRefresh?.();
     } else {
       setPinError('密码不对哦（可检查根目录 .env 文件中的 PARENT_PIN，默认：1234）');
     }
@@ -66,13 +117,12 @@ export const ParentModal: React.FC<ParentModalProps> = ({
       openaiBaseUrl: baseUrl.trim(),
       openaiModel: modelName.trim(),
       childName: childName.trim(),
-      childGender: childGender as 'boy' | 'girl',
+      childGender,
       parentPin: parentPin.trim(),
       dailyWorldMinutes: Math.max(0, Number(dailyWorldMinutes) || 0),
     });
     setApiKey('');
-    setSaveSuccess('✅ 配置已保存并自动同步写入 .env 配置文件！');
-    setTimeout(() => setSaveSuccess(''), 2500);
+    showToast('✅ 配置已保存并自动同步写入 .env 配置文件！');
   };
 
   const handleResetDailyTasks = () => {
@@ -81,8 +131,7 @@ export const ParentModal: React.FC<ParentModalProps> = ({
       tasks: resetTasks,
       streakDays: state.streakDays + 1,
     });
-    setSaveSuccess('✅ 已开启新一天的作业打卡，连续打卡天数 +1！');
-    setTimeout(() => setSaveSuccess(''), 2500);
+    showToast('✅ 已开启新一天的作业打卡，连续打卡天数 +1！');
   };
 
   const handleAddNewTask = (e: React.FormEvent) => {
@@ -105,6 +154,7 @@ export const ParentModal: React.FC<ParentModalProps> = ({
       tasks: [...state.tasks, newTask],
     });
     setNewTaskTitle('');
+    showToast('➕ 已新增作业任务！');
   };
 
   const handleDeleteTask = (id: string) => {
@@ -127,8 +177,7 @@ export const ParentModal: React.FC<ParentModalProps> = ({
         golden_apple: (state.foodsInventory.golden_apple || 0) + 2,
       },
     });
-    setSaveSuccess('🎁 已手动为小朋友发放【家长表扬大礼包】（+25绿宝石、+5钻石块、+5金块、+2金苹果）！');
-    setTimeout(() => setSaveSuccess(''), 3000);
+    showToast('🎁 已发放【家长表扬大礼包】（+25绿宝石、+5钻石块、+5金块、+2金苹果）！');
   };
 
   const handleGrantSpecialBlock = (blockId: BlockId, count: number) => {
@@ -140,8 +189,7 @@ export const ParentModal: React.FC<ParentModalProps> = ({
         [blockId]: (state.blocksInventory[blockId] || 0) + count,
       },
     });
-    setSaveSuccess(`🦄 已成功为小朋友发放特殊发光砖块：【${meta.name} +${count}】！`);
-    setTimeout(() => setSaveSuccess(''), 3000);
+    showToast(`🦄 已发放特殊发光砖块：【${meta.name} +${count}】！`);
   };
 
   const handleGrantAllPonyBlocks = () => {
@@ -154,8 +202,7 @@ export const ParentModal: React.FC<ParentModalProps> = ({
         pony_pinkie: (state.blocksInventory.pony_pinkie || 0) + 5,
       },
     });
-    setSaveSuccess('🦄✨ 已发放【小马宝莉发光砖全套大礼包】（紫悦+5、云宝+5、碧琪+5）！');
-    setTimeout(() => setSaveSuccess(''), 3000);
+    showToast('🦄✨ 已发放【小马宝莉发光砖全套大礼包】（紫悦+5、云宝+5、碧琪+5）！');
   };
 
   const handleResetWorldPlayTime = () => {
@@ -164,8 +211,7 @@ export const ParentModal: React.FC<ParentModalProps> = ({
       worldPlaySecondsToday: 0,
       worldPlayDate: new Date().toISOString().slice(0, 10),
     });
-    setSaveSuccess('⏳ 已将今日《我的世界》已玩时长清零，小朋友可重新获得完整建造时间！');
-    setTimeout(() => setSaveSuccess(''), 3000);
+    showToast('⏳ 已将今日《我的世界》已玩时长清零！');
   };
 
   const handleAddWish = (e: React.FormEvent) => {
@@ -184,176 +230,505 @@ export const ParentModal: React.FC<ParentModalProps> = ({
       ],
     });
     setNewWishTitle('');
+    showToast('🎟️ 已新增现实心愿奖励项！');
   };
 
+  const totalBlocks = Object.values(state.blocksInventory).reduce((a, b) => a + b, 0);
+  const playedMinutes = Math.floor((state.worldPlaySecondsToday || 0) / 60);
+
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div className="max-w-3xl w-full bg-zinc-900 border-4 border-black rounded-2xl shadow-2xl overflow-hidden text-white">
-        {/* Header */}
-        <div className="bg-zinc-800 px-6 py-4 border-b-2 border-zinc-700 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <Lock className="w-5 h-5 text-amber-400" />
-            <h2 className="text-lg font-black">家长控制台（OpenAI 接口配置 · 作业管理 · 照片历史）</h2>
+    <div
+      className={
+        isStandalonePage
+          ? 'h-[100dvh] w-screen bg-zinc-950 text-white flex flex-col overflow-hidden select-none'
+          : 'fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-y-auto'
+      }
+    >
+      <div
+        className={
+          isStandalonePage
+            ? 'w-full h-full flex flex-col overflow-hidden max-w-2xl mx-auto bg-zinc-900 sm:border-x-2 sm:border-zinc-800'
+            : 'max-w-3xl w-full bg-zinc-900 border-4 border-black rounded-2xl shadow-2xl overflow-hidden text-white flex flex-col max-h-[92dvh]'
+        }
+      >
+        {/* Top Sticky Header (Mobile Portrait Friendly) */}
+        <div className="bg-zinc-800 px-4 pt-[max(0.75rem,calc(env(safe-area-inset-top,0px)+0.4rem))] pb-3 border-b-2 border-zinc-700 flex items-center justify-between gap-2 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <Lock className="w-5 h-5 text-amber-400 shrink-0" />
+            <div className="truncate">
+              <h2 className="text-base sm:text-lg font-black truncate">
+                {state.childName} · 家长控制台
+              </h2>
+              <p className="text-[11px] text-zinc-400 truncate">
+                💎 绿宝石 {state.emeralds} · 🧱 方块 {totalBlocks} · ⏳ 今日已玩 {playedMinutes}/
+                {settings.dailyWorldMinutes ?? 60}分
+              </p>
+            </div>
           </div>
-          <button
-            onClick={onClose}
-            className="px-3 py-1 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-sm font-bold"
-          >
-            ✕ 关闭
-          </button>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {unlocked && onRefresh && (
+              <button
+                type="button"
+                onClick={handleManualRefresh}
+                disabled={isRefreshing}
+                className="px-3 py-1.5 rounded-xl bg-zinc-700 hover:bg-zinc-600 active:scale-95 text-xs font-bold flex items-center gap-1 text-zinc-100"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <span>刷新</span>
+              </button>
+            )}
+            {!isStandalonePage && onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-1.5 rounded-xl bg-zinc-700 hover:bg-zinc-600 text-xs font-bold"
+              >
+                ✕ 关闭
+              </button>
+            )}
+          </div>
         </div>
 
         {!unlocked ? (
-          <form onSubmit={handleVerifyPin} className="p-8 max-w-sm mx-auto text-center space-y-4">
-            <div className="text-4xl">🔐</div>
-            <h3 className="text-lg font-black">请输入家长密码</h3>
-            <p className="text-xs text-zinc-400">默认初始密码为：1234</p>
-            <input
-              type="password"
-              inputMode="numeric"
-              value={pinInput}
-              onChange={(e) => setPinInput(e.target.value)}
-              placeholder="输入 1234"
-              autoFocus
-              className="w-full text-center text-2xl font-black tracking-widest py-2.5 rounded-xl bg-black border-2 border-zinc-600 focus:border-amber-400 focus:outline-none"
-            />
-            {pinError && <p className="text-xs text-rose-400 font-bold">{pinError}</p>}
-            <button
-              type="submit"
-              className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black"
+          <div className="flex-1 overflow-y-auto flex items-center justify-center p-6">
+            <form
+              onSubmit={handleVerifyPin}
+              className="w-full max-w-sm bg-zinc-800/60 border-2 border-zinc-700 rounded-2xl p-6 text-center space-y-4 shadow-xl"
             >
-              进入家长后台
-            </button>
-          </form>
+              <div className="text-5xl">🔐</div>
+              <h3 className="text-xl font-black">请输入家长密码</h3>
+              <p className="text-xs text-zinc-400">
+                验证密码后即可在手机上管理作业、发放小马宝莉发光砖块与查看作业照片
+              </p>
+              <input
+                type="password"
+                inputMode="numeric"
+                value={pinInput}
+                onChange={(e) => setPinInput(e.target.value)}
+                placeholder="输入家长密码"
+                autoFocus
+                className="w-full text-center text-2xl font-black tracking-widest py-3 rounded-xl bg-black border-2 border-zinc-600 focus:border-amber-400 focus:outline-none text-white"
+              />
+              {pinError && <p className="text-xs text-rose-400 font-bold">{pinError}</p>}
+              <button
+                type="submit"
+                className="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-[0.99] text-zinc-950 font-black text-base shadow-lg"
+              >
+                进入家长后台
+              </button>
+            </form>
+          </div>
         ) : (
-          <div className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
-            {/* Tabs */}
-            <div className="flex gap-2 border-b border-zinc-700 pb-3">
+          <div className="flex-1 overflow-y-auto p-3.5 sm:p-5 pb-[max(1.5rem,calc(env(safe-area-inset-bottom,0px)+1rem))] space-y-4">
+            {/* 3-Column Equal Width Mobile Tabs */}
+            <div className="grid grid-cols-3 gap-1.5 bg-zinc-950 p-1.5 rounded-2xl border border-zinc-800 sticky top-0 z-10">
               <button
-                onClick={() => setActiveTab('ai')}
-                className={`px-4 py-2 rounded-xl text-sm font-black ${
-                  activeTab === 'ai' ? 'bg-amber-400 text-black' : 'bg-zinc-800 text-zinc-300'
+                type="button"
+                onClick={() => {
+                  sound.playClick();
+                  setActiveTab('tasks');
+                }}
+                className={`py-2.5 px-2 rounded-xl text-xs sm:text-sm font-black transition text-center truncate ${
+                  activeTab === 'tasks'
+                    ? 'bg-amber-400 text-zinc-950 shadow'
+                    : 'text-zinc-300 hover:bg-zinc-800'
                 }`}
               >
-                🤖 OpenAI 模型与基础设置
+                📋 作业与发奖
               </button>
               <button
-                onClick={() => setActiveTab('tasks')}
-                className={`px-4 py-2 rounded-xl text-sm font-black ${
-                  activeTab === 'tasks' ? 'bg-amber-400 text-black' : 'bg-zinc-800 text-zinc-300'
+                type="button"
+                onClick={() => {
+                  sound.playClick();
+                  setActiveTab('gallery');
+                  onRefresh?.();
+                }}
+                className={`py-2.5 px-2 rounded-xl text-xs sm:text-sm font-black transition text-center truncate ${
+                  activeTab === 'gallery'
+                    ? 'bg-amber-400 text-zinc-950 shadow'
+                    : 'text-zinc-300 hover:bg-zinc-800'
                 }`}
               >
-                📋 每日作业与奖励管理
+                📸 照片墙 ({state.submissions.length})
               </button>
               <button
-                onClick={() => setActiveTab('gallery')}
-                className={`px-4 py-2 rounded-xl text-sm font-black ${
-                  activeTab === 'gallery' ? 'bg-amber-400 text-black' : 'bg-zinc-800 text-zinc-300'
+                type="button"
+                onClick={() => {
+                  sound.playClick();
+                  setActiveTab('ai');
+                }}
+                className={`py-2.5 px-2 rounded-xl text-xs sm:text-sm font-black transition text-center truncate ${
+                  activeTab === 'ai'
+                    ? 'bg-amber-400 text-zinc-950 shadow'
+                    : 'text-zinc-300 hover:bg-zinc-800'
                 }`}
               >
-                📸 作业照片墙 ({state.submissions.length})
+                ⚙️ 基础与AI
               </button>
             </div>
 
             {saveSuccess && (
-              <div className="p-3 rounded-xl bg-emerald-900/80 border border-emerald-400 text-emerald-200 text-sm font-bold flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <div className="p-3 rounded-xl bg-emerald-900/90 border border-emerald-400 text-emerald-100 text-xs sm:text-sm font-bold flex items-center gap-2 shadow-lg">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-300" />
                 <span>{saveSuccess}</span>
               </div>
             )}
 
-            {/* Tab 1: OpenAI & Environment Settings */}
-            {activeTab === 'ai' && (
-              <form onSubmit={handleSaveConfig} className="space-y-4">
-                {/* .env File Banner Notice */}
-                <div className="p-3.5 rounded-xl bg-blue-950/60 border border-blue-400/40 text-xs text-blue-200 leading-relaxed">
-                  <div className="font-bold flex items-center gap-1.5 text-blue-300 mb-1">
-                    <span>📁 集中环境变量配置模式（.env / Docker）</span>
-                  </div>
-                  家长密码与 OpenAI 密钥已改为由项目根目录的 <code className="px-1 py-0.5 rounded bg-black/60 font-mono text-amber-300">.env</code> 配置文件集中管理。你可以在下方直接修改并保存（会自动写入 <code className="font-mono text-amber-300">.env</code>），也可以直接在 Linux 终端通过 vim/nano 修改根目录的 <code className="font-mono text-amber-300">.env</code> 文件。
+            {/* Tab 1: Homework Tasks & Bonus Management (Default on Mobile) */}
+            {activeTab === 'tasks' && (
+              <div className="space-y-4">
+                {/* Mobile Portrait Quick Actions: Full-width stacked on phone, row on tablet */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={handleGrantParentBonus}
+                    className="w-full p-3 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-[0.99] text-zinc-950 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow"
+                  >
+                    <Gift className="w-4 h-4 shrink-0" />
+                    <span>🎁 发放家长表扬大礼包 (+25💎/+5钻石块)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleResetDailyTasks}
+                    className="w-full p-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-[0.99] text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow"
+                  >
+                    <RotateCcw className="w-4 h-4 shrink-0" />
+                    <span>🌅 开启新一天（重置今日作业进度）</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleResetWorldPlayTime}
+                    className="w-full p-3 rounded-xl bg-teal-600 hover:bg-teal-500 active:scale-[0.99] text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow"
+                  >
+                    <Clock className="w-4 h-4 shrink-0" />
+                    <span>
+                      ⏳ 清零今日游玩时长 ({playedMinutes}/{settings.dailyWorldMinutes ?? 60}分)
+                    </span>
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="grid grid-cols-2 gap-4">
+                {/* Special Glowing My Little Pony Blocks Section */}
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-br from-purple-950/85 via-fuchsia-950/80 to-pink-950/85 border-2 border-fuchsia-400/50 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                     <div>
-                      <label className="block text-xs font-bold text-zinc-300 mb-1">
-                        👦 小朋友昵称 (CHILD_NAME)：
-                      </label>
-                      <input
-                        type="text"
-                        value={childName}
-                        onChange={(e) => setChildName(e.target.value)}
-                        className="w-full px-3.5 py-2 rounded-xl bg-black border border-zinc-700 text-white text-sm"
-                      />
+                      <div className="text-sm font-black text-fuchsia-200 flex items-center gap-1.5">
+                        <Sparkles className="w-4 h-4 text-amber-300 shrink-0" />
+                        <span>🦄 发放小马宝莉限定发光砖块</span>
+                      </div>
+                      <p className="text-xs text-fuchsia-300/80 mt-0.5">
+                        仅限家长发放，印有小马宝莉像素图案，在《我的世界》里自带彩光！
+                      </p>
                     </div>
-                    <div>
-                      <label className="block text-xs font-bold text-zinc-300 mb-1">
-                        👕 性别 (CHILD_GENDER)：
-                      </label>
-                      <select
-                        value={childGender}
-                        onChange={(e) => setChildGender(e.target.value)}
-                        className="w-full px-3.5 py-2 rounded-xl bg-black border border-zinc-700 text-white text-sm"
-                      >
-                        <option value="boy">男孩</option>
-                        <option value="girl">女孩</option>
-                      </select>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={handleGrantAllPonyBlocks}
+                      className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-fuchsia-400 to-amber-300 active:scale-[0.99] text-zinc-950 font-black text-xs border border-black shadow-mc shrink-0"
+                    >
+                      🎁 全套3款各发 +5 块
+                    </button>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-amber-300 mb-1">
-                        🔐 家长密码 (PARENT_PIN)：
-                      </label>
-                      <input
-                        type="text"
-                        value={parentPin}
-                        onChange={(e) => setParentPin(e.target.value)}
-                        placeholder="默认 1234"
-                        className="w-full px-3.5 py-2 rounded-xl bg-black border border-zinc-700 text-amber-300 font-mono text-sm"
-                      />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {(['pony_twilight', 'pony_rainbow', 'pony_pinkie'] as BlockId[]).map((bId) => {
+                      const meta = BLOCK_CATALOG[bId];
+                      return (
+                        <div
+                          key={bId}
+                          className="p-3 rounded-xl bg-black/50 border border-fuchsia-400/30 flex items-center justify-between gap-2"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <BlockCubeIcon blockId={bId} size={38} />
+                            <div className="min-w-0">
+                              <div className="text-xs font-black text-white truncate">
+                                {meta.name}
+                              </div>
+                              <div className="text-[11px] text-fuchsia-300">
+                                背包现有: {state.blocksInventory[bId] || 0} 块
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleGrantSpecialBlock(bId, 3)}
+                              className="px-3 py-2 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-500 active:scale-95 text-white font-black text-xs"
+                            >
+                              +3块
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleGrantSpecialBlock(bId, 10)}
+                              className="px-3 py-2 rounded-lg bg-amber-400 hover:bg-amber-300 active:scale-95 text-zinc-950 font-black text-xs"
+                            >
+                              +10块
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Current Tasks List */}
+                <div className="space-y-2">
+                  <h4 className="text-xs font-black text-zinc-400">📚 当前每日作业列表：</h4>
+                  {state.tasks.map((t) => (
+                    <div
+                      key={t.id}
+                      className="p-3 rounded-xl bg-zinc-800/90 border border-zinc-700 flex items-center justify-between gap-2"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="text-xl shrink-0">{SUBJECT_META[t.subject].icon}</span>
+                        <div className="min-w-0">
+                          <div className="text-sm font-bold truncate">{t.title}</div>
+                          <div className="text-xs text-zinc-400">
+                            今日已交：{t.completedSteps} / {t.targetSteps} 小节 · 奖励 💎
+                            {t.baseEmeralds}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteTask(t.id)}
+                        className="p-2.5 rounded-xl bg-rose-950/80 hover:bg-rose-900 text-rose-300 shrink-0"
+                        title="删除任务"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
-                    <div>
-                      <label className="block text-xs font-bold text-lime-300 mb-1">
-                        ⏳ 每日限时(分, DAILY_WORLD_MINUTES)：
-                      </label>
+                  ))}
+                </div>
+
+                {/* Add New Task Form */}
+                <form
+                  onSubmit={handleAddNewTask}
+                  className="p-3.5 sm:p-4 rounded-2xl bg-zinc-800/60 border border-zinc-700 space-y-3"
+                >
+                  <div className="text-xs font-black text-lime-300">➕ 新增一项作业任务：</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <select
+                      value={newTaskSubject}
+                      onChange={(e) => setNewTaskSubject(e.target.value as SubjectType)}
+                      className="col-span-2 px-3 py-2.5 rounded-xl bg-black border border-zinc-700 text-sm text-white"
+                    >
+                      <option value="chinese">📖 语文</option>
+                      <option value="math">🔢 数学</option>
+                      <option value="english">🔤 英语</option>
+                      <option value="sports">🏃 体育</option>
+                    </select>
+                    <div className="flex items-center gap-1.5 bg-black border border-zinc-700 rounded-xl px-2.5">
+                      <span className="text-xs text-zinc-400 shrink-0">小节:</span>
                       <input
                         type="number"
-                        min={0}
-                        max={600}
-                        value={dailyWorldMinutes}
-                        onChange={(e) => setDailyWorldMinutes(Math.max(0, Number(e.target.value) || 0))}
-                        placeholder="默认 60"
-                        className="w-full px-3.5 py-2 rounded-xl bg-black border border-zinc-700 text-lime-300 font-mono text-sm"
+                        min={1}
+                        max={5}
+                        value={newTaskSteps}
+                        onChange={(e) => setNewTaskSteps(Number(e.target.value) || 1)}
+                        className="w-full py-2 bg-transparent text-sm text-center font-bold focus:outline-none"
                       />
                     </div>
                   </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newTaskTitle}
+                      onChange={(e) => setNewTaskTitle(e.target.value)}
+                      placeholder="例如：背诵《古诗二首》 / 口算练习"
+                      className="flex-1 px-3 py-2.5 rounded-xl bg-black border border-zinc-700 text-sm text-white"
+                    />
+                    <button
+                      type="submit"
+                      className="px-4 py-2.5 rounded-xl bg-lime-500 hover:bg-lime-400 text-black font-black text-xs sm:text-sm flex items-center gap-1 shrink-0"
+                    >
+                      <Plus className="w-4 h-4" /> 添加
+                    </button>
+                  </div>
+                </form>
+
+                {/* Add New Real-Life Wish */}
+                <form
+                  onSubmit={handleAddWish}
+                  className="p-3.5 sm:p-4 rounded-2xl bg-zinc-800/60 border border-zinc-700 space-y-3"
+                >
+                  <div className="text-xs font-black text-pink-300">🎟️ 新增现实心愿奖励项：</div>
+                  <input
+                    type="text"
+                    value={newWishTitle}
+                    onChange={(e) => setNewWishTitle(e.target.value)}
+                    placeholder="例如：周末去游乐场 / 买一套我的世界乐高"
+                    className="w-full px-3 py-2.5 rounded-xl bg-black border border-zinc-700 text-sm text-white"
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 bg-black border border-zinc-700 rounded-xl px-3 py-2 flex-1">
+                      <span className="text-xs text-zinc-400">兑换所需💎绿宝石:</span>
+                      <input
+                        type="number"
+                        value={newWishPrice}
+                        onChange={(e) => setNewWishPrice(Number(e.target.value) || 30)}
+                        className="w-20 bg-transparent text-sm font-bold text-amber-300 focus:outline-none"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="py-2.5 px-5 rounded-xl bg-pink-500 hover:bg-pink-400 text-black font-black text-xs sm:text-sm shrink-0"
+                    >
+                      ➕ 添加心愿
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* Tab 2: Homework Photo Gallery */}
+            {activeTab === 'gallery' && (
+              <div className="space-y-3">
+                {state.submissions.length === 0 ? (
+                  <div className="text-center py-14 text-zinc-400 text-sm">
+                    <ImageIcon className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                    还没有提交过作业照片哦，小朋友拍照提交后这里会实时显示！
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {state.submissions.map((sub) => (
+                      <div
+                        key={sub.id}
+                        className="bg-zinc-800 border border-zinc-700 rounded-2xl p-3 flex flex-col gap-2.5"
+                      >
+                        {sub.imageUrl && (
+                          <div
+                            onClick={() => setPreviewPhotoUrl(sub.imageUrl || null)}
+                            className="relative group cursor-pointer overflow-hidden rounded-xl border border-zinc-600 bg-black"
+                          >
+                            <img
+                              src={sub.imageUrl}
+                              alt={sub.taskTitle}
+                              loading="lazy"
+                              className="w-full h-48 object-cover"
+                            />
+                            <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/75 text-[11px] text-zinc-200 font-bold">
+                              🔍 点击放大查看
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs sm:text-sm font-black text-amber-300 truncate">
+                            {sub.taskTitle}
+                          </span>
+                          <span className="text-[11px] text-zinc-400 shrink-0">
+                            {sub.timestamp}
+                          </span>
+                        </div>
+                        {sub.studentNote && (
+                          <p className="text-xs text-lime-300 bg-black/40 px-2.5 py-1.5 rounded-lg">
+                            👦 留言：{sub.studentNote}
+                          </p>
+                        )}
+                        <p className="text-xs text-zinc-200 leading-relaxed">
+                          🧙‍♂️ 村长评语：“{sub.aiReview.villageChiefComment}”
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Tab 3: OpenAI & Environment Settings */}
+            {activeTab === 'ai' && (
+              <form onSubmit={handleSaveConfig} className="space-y-4">
+                <div className="p-3.5 rounded-2xl bg-blue-950/60 border border-blue-400/40 text-xs text-blue-200 leading-relaxed">
+                  <div className="font-bold text-blue-300 mb-1">
+                    📁 集中环境变量配置模式（.env / Docker）
+                  </div>
+                  在下方修改并保存后会自动同步写入服务器 <code className="font-mono text-amber-300">.env</code> 配置文件。
                 </div>
 
-                <div className="p-4 rounded-xl bg-zinc-800/70 border border-zinc-700 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-black text-amber-300 flex items-center gap-1.5">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-300 mb-1">
+                      👦 小朋友昵称：
+                    </label>
+                    <input
+                      type="text"
+                      value={childName}
+                      onChange={(e) => setChildName(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl bg-black border border-zinc-700 text-white text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-300 mb-1">
+                      👕 角色性别：
+                    </label>
+                    <select
+                      value={childGender}
+                      onChange={(e) => setChildGender(e.target.value as 'boy' | 'girl')}
+                      className="w-full px-3 py-2.5 rounded-xl bg-black border border-zinc-700 text-white text-sm"
+                    >
+                      <option value="boy">男孩</option>
+                      <option value="girl">女孩</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-amber-300 mb-1">
+                      🔐 家长密码：
+                    </label>
+                    <input
+                      type="text"
+                      value={parentPin}
+                      onChange={(e) => setParentPin(e.target.value)}
+                      placeholder="默认 1234"
+                      className="w-full px-3 py-2.5 rounded-xl bg-black border border-zinc-700 text-amber-300 font-mono text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-lime-300 mb-1">
+                      ⏳ 每日限时(分钟)：
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={600}
+                      value={dailyWorldMinutes}
+                      onChange={(e) =>
+                        setDailyWorldMinutes(Math.max(0, Number(e.target.value) || 0))
+                      }
+                      placeholder="默认 60"
+                      className="w-full px-3 py-2.5 rounded-xl bg-black border border-zinc-700 text-lime-300 font-mono text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-zinc-800/70 border border-zinc-700 space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-1.5">
+                    <span className="text-xs sm:text-sm font-black text-amber-300 flex items-center gap-1.5">
                       <Key className="w-4 h-4" />
-                      <span>OpenAI Vision 视觉模型配置 (.env)</span>
+                      <span>OpenAI 视觉模型配置</span>
                     </span>
-                    <span className="text-xs px-2 py-0.5 rounded bg-black text-emerald-400 font-bold">
+                    <span className="text-[11px] px-2 py-0.5 rounded bg-black text-emerald-400 font-bold">
                       {settings.hasApiKey
-                        ? `当前已配置 (${settings.openaiApiKeyMasked})`
-                        : '未配置 Key（当前运行智能村长体验模式）'}
+                        ? `已配置 (${settings.openaiApiKeyMasked})`
+                        : '未配置 Key'}
                     </span>
                   </div>
 
                   <div>
                     <label className="block text-xs text-zinc-400 mb-1">
-                      OpenAI API Key (OPENAI_API_KEY，留空则保持原配置)：
+                      API Key (OPENAI_API_KEY，留空则保持原配置)：
                     </label>
                     <input
                       type="password"
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}
-                      placeholder={settings.hasApiKey ? `已设置 (${settings.openaiApiKeyMasked})，输入可覆盖` : 'sk-...'}
-                      className="w-full px-3.5 py-2 rounded-xl bg-black border border-zinc-700 text-white text-sm font-mono"
+                      placeholder={
+                        settings.hasApiKey
+                          ? `已设置 (${settings.openaiApiKeyMasked})，输入可覆盖`
+                          : 'sk-...'
+                      }
+                      className="w-full px-3 py-2.5 rounded-xl bg-black border border-zinc-700 text-white text-sm font-mono"
                     />
                   </div>
 
@@ -367,7 +742,7 @@ export const ParentModal: React.FC<ParentModalProps> = ({
                         value={baseUrl}
                         onChange={(e) => setBaseUrl(e.target.value)}
                         placeholder="https://api.openai.com/v1"
-                        className="w-full px-3.5 py-2 rounded-xl bg-black border border-zinc-700 text-white text-sm font-mono"
+                        className="w-full px-3 py-2.5 rounded-xl bg-black border border-zinc-700 text-white text-sm font-mono"
                       />
                     </div>
                     <div>
@@ -379,7 +754,7 @@ export const ParentModal: React.FC<ParentModalProps> = ({
                         value={modelName}
                         onChange={(e) => setModelName(e.target.value)}
                         placeholder="gpt-4o"
-                        className="w-full px-3.5 py-2 rounded-xl bg-black border border-zinc-700 text-white text-sm font-mono"
+                        className="w-full px-3 py-2.5 rounded-xl bg-black border border-zinc-700 text-white text-sm font-mono"
                       />
                     </div>
                   </div>
@@ -387,252 +762,36 @@ export const ParentModal: React.FC<ParentModalProps> = ({
 
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-lime-500 hover:bg-lime-400 text-zinc-950 font-black text-sm flex items-center gap-2"
+                  className="w-full py-3.5 rounded-xl bg-lime-500 hover:bg-lime-400 active:scale-[0.99] text-zinc-950 font-black text-sm flex items-center justify-center gap-2 shadow-lg"
                 >
                   <span>💾 保存并同步写入 .env</span>
                 </button>
               </form>
             )}
-
-            {/* Tab 2: Homework Tasks & Bonus Management */}
-            {activeTab === 'tasks' && (
-              <div className="space-y-5">
-                {/* Quick Actions */}
-                <div className="flex flex-wrap gap-2.5">
-                  <button
-                    type="button"
-                    onClick={handleResetDailyTasks}
-                    className="px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-black text-xs flex items-center gap-1.5"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                    <span>开启新一天（重置今日作业格数）</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleGrantParentBonus}
-                    className="px-3.5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black text-xs flex items-center gap-1.5"
-                  >
-                    <Gift className="w-4 h-4" />
-                    <span>🎁 发【家长表扬大礼包】(+25绿宝石 & +5钻石块)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleResetWorldPlayTime}
-                    className="px-3.5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs flex items-center gap-1.5"
-                  >
-                    <Clock className="w-4 h-4" />
-                    <span>
-                      ⏳ 重置今日《我的世界》时长 (已玩 {Math.floor((state.worldPlaySecondsToday || 0) / 60)} 分钟 / 限{' '}
-                      {settings.dailyWorldMinutes ?? 60} 分钟)
-                    </span>
-                  </button>
-                </div>
-
-                {/* Special Glowing My Little Pony Blocks Section */}
-                <div className="p-4 rounded-xl bg-gradient-to-r from-purple-950/80 via-fuchsia-950/75 to-pink-950/80 border-2 border-fuchsia-400/50 space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <div className="text-sm font-black text-fuchsia-200 flex items-center gap-1.5">
-                        <Sparkles className="w-4 h-4 text-amber-300" />
-                        <span>🦄 发放特殊发光砖块（小马宝莉限定系列 · 夜晚自带彩光）</span>
-                      </div>
-                      <p className="text-xs text-fuchsia-300/80 mt-0.5">
-                        该系列仅限家长控制面板表扬发放，表面印有小马宝莉像素头像与可爱标志，在《我的世界》中会自己发光！
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleGrantAllPonyBlocks}
-                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-fuchsia-400 to-amber-300 hover:brightness-110 text-zinc-950 font-black text-xs border border-black shadow-mc shrink-0"
-                    >
-                      🎁 全套3款各发 +5 块
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                    {(['pony_twilight', 'pony_rainbow', 'pony_pinkie'] as BlockId[]).map((bId) => {
-                      const meta = BLOCK_CATALOG[bId];
-                      return (
-                        <div
-                          key={bId}
-                          className="p-3 rounded-xl bg-black/50 border border-fuchsia-400/30 flex items-center justify-between gap-2"
-                        >
-                          <div className="flex items-center gap-2.5">
-                            <BlockCubeIcon blockId={bId} size={38} />
-                            <div>
-                              <div className="text-xs font-black text-white">{meta.name}</div>
-                              <div className="text-[11px] text-fuchsia-300">
-                                当前背包: {state.blocksInventory[bId] || 0} 块
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex flex-col gap-1 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => handleGrantSpecialBlock(bId, 3)}
-                              className="px-2.5 py-1 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-black text-xs"
-                            >
-                              +3 块
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleGrantSpecialBlock(bId, 10)}
-                              className="px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-black text-xs"
-                            >
-                              +10 块
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Current Tasks List */}
-                <div className="space-y-2">
-                  <h4 className="text-xs font-black text-zinc-400 uppercase">当前每日作业列表：</h4>
-                  {state.tasks.map((t) => (
-                    <div
-                      key={t.id}
-                      className="p-3 rounded-xl bg-zinc-800 border border-zinc-700 flex items-center justify-between gap-2"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-xl">{SUBJECT_META[t.subject].icon}</span>
-                        <div>
-                          <div className="text-sm font-bold">{t.title}</div>
-                          <div className="text-xs text-zinc-400">
-                            今日已交：{t.completedSteps} / {t.targetSteps} 小节 · 每次基础奖励 💎{t.baseEmeralds}
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleDeleteTask(t.id)}
-                        className="p-2 rounded-lg bg-rose-950/80 hover:bg-rose-900 text-rose-300"
-                        title="删除任务"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Add New Task Form */}
-                <form
-                  onSubmit={handleAddNewTask}
-                  className="p-4 rounded-xl bg-zinc-800/60 border border-zinc-700 space-y-3"
-                >
-                  <div className="text-xs font-black text-lime-300">➕ 新增一项作业任务：</div>
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
-                    <select
-                      value={newTaskSubject}
-                      onChange={(e) => setNewTaskSubject(e.target.value as SubjectType)}
-                      className="px-3 py-2 rounded-xl bg-black border border-zinc-700 text-sm"
-                    >
-                      <option value="chinese">📖 语文</option>
-                      <option value="math">🔢 数学</option>
-                      <option value="english">🔤 英语</option>
-                      <option value="sports">🏃 体育</option>
-                    </select>
-                    <input
-                      type="text"
-                      value={newTaskTitle}
-                      onChange={(e) => setNewTaskTitle(e.target.value)}
-                      placeholder="例如：背诵《古诗二首》 / 乘法口诀表"
-                      className="sm:col-span-2 px-3 py-2 rounded-xl bg-black border border-zinc-700 text-sm"
-                    />
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min={1}
-                        max={5}
-                        value={newTaskSteps}
-                        onChange={(e) => setNewTaskSteps(Number(e.target.value) || 1)}
-                        className="w-16 px-2 py-2 rounded-xl bg-black border border-zinc-700 text-sm text-center"
-                      />
-                      <button
-                        type="submit"
-                        className="flex-1 py-2 px-3 rounded-xl bg-lime-500 text-black font-black text-xs flex items-center justify-center gap-1"
-                      >
-                        <Plus className="w-4 h-4" /> 添加
-                      </button>
-                    </div>
-                  </div>
-                </form>
-
-                {/* Add New Real-Life Wish */}
-                <form
-                  onSubmit={handleAddWish}
-                  className="p-4 rounded-xl bg-zinc-800/60 border border-zinc-700 space-y-3"
-                >
-                  <div className="text-xs font-black text-pink-300">🎟️ 新增现实心愿奖励项：</div>
-                  <div className="flex flex-col sm:flex-row gap-2.5">
-                    <input
-                      type="text"
-                      value={newWishTitle}
-                      onChange={(e) => setNewWishTitle(e.target.value)}
-                      placeholder="例如：周末去游乐场 / 买一套我的世界乐高"
-                      className="flex-1 px-3 py-2 rounded-xl bg-black border border-zinc-700 text-sm"
-                    />
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-zinc-400">所需💎:</span>
-                      <input
-                        type="number"
-                        value={newWishPrice}
-                        onChange={(e) => setNewWishPrice(Number(e.target.value) || 30)}
-                        className="w-20 px-2 py-2 rounded-xl bg-black border border-zinc-700 text-sm text-center"
-                      />
-                      <button
-                        type="submit"
-                        className="py-2 px-4 rounded-xl bg-pink-500 text-black font-black text-xs"
-                      >
-                        添加心愿
-                      </button>
-                    </div>
-                  </div>
-                </form>
-              </div>
-            )}
-
-            {/* Tab 3: Homework Photo Gallery */}
-            {activeTab === 'gallery' && (
-              <div className="space-y-3">
-                {state.submissions.length === 0 ? (
-                  <div className="text-center py-12 text-zinc-400 text-sm">
-                    <ImageIcon className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                    还没有提交过作业照片哦，去主界面拍照试试吧！
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {state.submissions.map((sub) => (
-                      <div
-                        key={sub.id}
-                        className="bg-zinc-800 border border-zinc-700 rounded-xl p-3 flex flex-col gap-2"
-                      >
-                        {sub.imageUrl && (
-                          <img
-                            src={sub.imageUrl}
-                            alt={sub.taskTitle}
-                            className="w-full h-40 object-cover rounded-lg border border-zinc-600"
-                          />
-                        )}
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-black text-amber-300">{sub.taskTitle}</span>
-                          <span className="text-[11px] text-zinc-400">{sub.timestamp}</span>
-                        </div>
-                        <p className="text-xs text-zinc-200 leading-relaxed">
-                          “{sub.aiReview.villageChiefComment}”
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         )}
       </div>
+
+      {/* Fullscreen Photo Lightbox for Parent Phone Inspection */}
+      {previewPhotoUrl && (
+        <div
+          onClick={() => setPreviewPhotoUrl(null)}
+          className="fixed inset-0 z-[60] bg-black/95 flex flex-col items-center justify-center p-3"
+        >
+          <button
+            type="button"
+            onClick={() => setPreviewPhotoUrl(null)}
+            className="absolute top-[max(1rem,env(safe-area-inset-top,1rem))] right-4 px-3.5 py-2 rounded-xl bg-zinc-800 text-white font-bold text-xs flex items-center gap-1 border border-zinc-600"
+          >
+            <X className="w-4 h-4" /> 关闭预览
+          </button>
+          <img
+            src={previewPhotoUrl}
+            alt="作业大图预览"
+            className="max-w-full max-h-[85dvh] object-contain rounded-xl"
+          />
+        </div>
+      )}
     </div>
   );
 };

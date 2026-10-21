@@ -790,6 +790,10 @@ app.get('/api/tts', async (req, res) => {
 const DIST_DIR = path.resolve(process.cwd(), 'dist');
 if (fs.existsSync(DIST_DIR)) {
   app.use(express.static(DIST_DIR));
+  // Support SPA routes such as /parent on mobile phones
+  app.get(['/parent', '/parent/*'], (_req, res) => {
+    res.sendFile(path.join(DIST_DIR, 'index.html'));
+  });
 }
 
 app.listen(PORT, '0.0.0.0', () => {

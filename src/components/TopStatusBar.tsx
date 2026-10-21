@@ -1,5 +1,5 @@
 import React from 'react';
-import { Volume2, VolumeX, Settings, Sparkles, Flame } from 'lucide-react';
+import { Volume2, VolumeX, Sparkles, Flame } from 'lucide-react';
 import { AppSettings, PlayerState } from '../types/game';
 import { PET_META } from '../data/catalog';
 import { sound } from '../utils/sound';
@@ -7,14 +7,12 @@ import { sound } from '../utils/sound';
 interface TopStatusBarProps {
   state: PlayerState;
   settings: AppSettings;
-  onOpenParentModal: () => void;
   onToggleSound: () => void;
 }
 
 export const TopStatusBar: React.FC<TopStatusBarProps> = ({
   state,
   settings,
-  onOpenParentModal,
   onToggleSound,
 }) => {
   const totalBlocks = Object.values(state.blocksInventory).reduce((acc, v) => acc + v, 0);
@@ -22,7 +20,7 @@ export const TopStatusBar: React.FC<TopStatusBarProps> = ({
   const petMeta = PET_META[activePet.id];
 
   return (
-    <header className="w-full bg-[#2c3823] border-b-4 border-[#151c10] px-4 py-2.5 flex items-center justify-between gap-3 shadow-lg z-20">
+    <header className="w-full bg-[#2c3823] border-b-4 border-[#151c10] px-4 pt-[max(0.65rem,calc(env(safe-area-inset-top,0px)+0.35rem))] pb-2.5 flex items-center justify-between gap-3 shadow-lg z-20">
       {/* Left: Player Info & XP Level Bar */}
       <div className="flex items-center gap-3">
         <img
@@ -106,7 +104,7 @@ export const TopStatusBar: React.FC<TopStatusBarProps> = ({
         </div>
       </div>
 
-      {/* Right: AI Status Badge, Sound & Parent Settings */}
+      {/* Right: AI Status Badge & Sound Toggle */}
       <div className="flex items-center gap-2">
         <div
           className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold border ${
@@ -114,7 +112,7 @@ export const TopStatusBar: React.FC<TopStatusBarProps> = ({
               ? 'bg-emerald-950/80 border-emerald-500/50 text-emerald-300'
               : 'bg-amber-950/80 border-amber-500/50 text-amber-300'
           }`}
-          title={settings.hasApiKey ? `已连接 ${settings.openaiModel}` : '当前使用智能村长体验模式，可在家长设置配置 OpenAI Key'}
+          title={settings.hasApiKey ? `已连接 ${settings.openaiModel}` : '当前使用智能村长体验模式'}
         >
           <Sparkles className="w-3.5 h-3.5" />
           <span>{settings.hasApiKey ? 'AI村长在线' : '智能村长模式'}</span>
@@ -129,17 +127,6 @@ export const TopStatusBar: React.FC<TopStatusBarProps> = ({
           title={settings.soundEnabled ? '音效与语音已开启' : '已静音'}
         >
           {settings.soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5 text-zinc-400" />}
-        </button>
-
-        <button
-          onClick={() => {
-            sound.playClick();
-            onOpenParentModal();
-          }}
-          className="px-3 py-2 rounded-lg bg-zinc-700 hover:bg-zinc-600 active:translate-y-0.5 border-2 border-black shadow-mc text-xs md:text-sm font-bold flex items-center gap-1.5 text-zinc-100"
-        >
-          <Settings className="w-4 h-4" />
-          <span className="hidden sm:inline">家长设置</span>
         </button>
       </div>
     </header>
