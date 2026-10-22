@@ -79,6 +79,17 @@ export interface RealWishItem {
   redeemedCount: number;
 }
 
+export interface ParentNotice {
+  id: string;
+  type: 'penalty' | 'reward';
+  reason: string;
+  deductEmeralds: number;
+  deductBlocks: Partial<Record<BlockId, number>>;
+  totalBlocksDeducted: number;
+  timestamp: string;
+  acknowledged: boolean;
+}
+
 export interface HomeworkTask {
   id: string;
   subject: SubjectType;
@@ -185,5 +196,6 @@ export interface PlayerState {
   worldSizeLevel: number;
   submissions: SubmissionRecord[];
   wishes: RealWishItem[];
+  parentNotices?: ParentNotice[];
 }
 

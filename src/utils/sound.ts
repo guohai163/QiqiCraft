@@ -228,6 +228,26 @@ class SoundManager {
     osc.stop(ctx.currentTime + 0.27);
   }
 
+  // Attention chime for parent habit reminder / deduction notice
+  playWarning() {
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const notes = [587.33, 440, 349.23];
+    notes.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      const start = ctx.currentTime + idx * 0.14;
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.18, start);
+      gain.gain.exponentialRampToValueAtTime(0.008, start + 0.25);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.26);
+    });
+  }
+
   // Clean emojis so TTS engine reads smoothly
   private cleanSpeechText(raw: string): string {
     return raw

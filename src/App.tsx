@@ -15,6 +15,7 @@ import { PetSanctuary } from './components/PetSanctuary';
 import { HeroShop } from './components/HeroShop';
 import { RewardChestModal } from './components/RewardChestModal';
 import { ParentModal } from './components/ParentModal';
+import { ParentNoticeModal } from './components/ParentNoticeModal';
 import { sound } from './utils/sound';
 
 type NavTab = 'quests' | 'world' | 'pets' | 'shop';
@@ -226,6 +227,16 @@ export const App: React.FC = () => {
     return null;
   };
 
+  const handleAcknowledgeNotice = (noticeId: string) => {
+    const updatedNotices = (state.parentNotices || []).map((n) =>
+      n.id === noticeId ? { ...n, acknowledged: true } : n
+    );
+    handleUpdateState({ parentNotices: updatedNotices });
+  };
+
+  const unacknowledgedNotice =
+    (state.parentNotices || []).find((n) => !n.acknowledged) || null;
+
   // Dedicated standalone Parent Console route (/parent) for parent's phone in portrait mode
   if (isParentRoute) {
     return (
@@ -348,6 +359,13 @@ export const App: React.FC = () => {
           setLatestReview(null);
           setActiveTab('world');
         }}
+      />
+
+      {/* Parent Habit Reminder & Deduction Notice Modal */}
+      <ParentNoticeModal
+        childName={state.childName}
+        notice={unacknowledgedNotice}
+        onAcknowledge={handleAcknowledgeNotice}
       />
     </div>
   );

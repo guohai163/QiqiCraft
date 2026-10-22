@@ -12,11 +12,21 @@ import {
   Clock,
   RefreshCw,
   X,
+  AlertTriangle,
 } from 'lucide-react';
-import { AppSettings, BlockId, HomeworkTask, PlayerState, SubjectType } from '../types/game';
+import { AppSettings, BlockId, HomeworkTask, ParentNotice, PlayerState, SubjectType } from '../types/game';
 import { BLOCK_CATALOG, SUBJECT_META } from '../data/catalog';
 import { BlockCubeIcon } from './PixelVisuals';
 import { sound } from '../utils/sound';
+
+const HABIT_REASON_PRESETS = [
+  '上课不认真听讲，走神做小动作',
+  '晚上不按时洗漱睡觉，拖延磨蹭',
+  '写作业拖拉分心，不专心完成',
+  '遇到小事乱发脾气，说话没礼貌',
+  '玩完玩具或学习用品不自己收拾',
+  '看屏幕时间到了不肯主动放下休息',
+];
 
 interface ParentModalProps {
   isOpen?: boolean;
@@ -78,6 +88,12 @@ export const ParentModal: React.FC<ParentModalProps> = ({
   // New Wish Form
   const [newWishTitle, setNewWishTitle] = useState('');
   const [newWishPrice, setNewWishPrice] = useState(50);
+
+  // Habit Penalty / Deduction Form
+  const [penaltyReason, setPenaltyReason] = useState('上课不认真听讲，走神做小动作');
+  const [deductEmeralds, setDeductEmeralds] = useState<number>(10);
+  const [deductBlockTarget, setDeductBlockTarget] = useState<'random' | BlockId>('random');
+  const [deductBlockCount, setDeductBlockCount] = useState<number>(5);
 
   if (!isOpen && !isStandalonePage) return null;
 
@@ -231,6 +247,81 @@ export const ParentModal: React.FC<ParentModalProps> = ({
     });
     setNewWishTitle('');
     showToast('🎟️ 已新增现实心愿奖励项！');
+  };
+
+  const handleSendPenaltyNotice = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanReason = penaltyReason.trim();
+    if (!cleanReason) {
+      showToast('⚠️ 请先选择或输入需要提醒小朋友改正的原因！');
+      return;
+    }
+
+    const actualEmeraldsDeducted = Math.min(
+      state.emeralds,
+      Math.max(0, Math.floor(Number(deductEmeralds) || 0))
+    );
+    const reqBlockCount = Math.max(0, Math.floor(Number(deductBlockCount) || 0));
+
+    const nextBlocksInventory: Record<BlockId, number> = { ...state.blocksInventory };
+    const deductedBlocksMap: Partial<Record<BlockId, number>> = {};
+    let actualBlocksDeducted = 0;
+
+    if (reqBlockCount > 0) {
+      if (deductBlockTarget === 'random') {
+        let remaining = reqBlockCount;
+        // Deduct from available blocks in inventory
+        const availableIds = (Object.keys(nextBlocksInventory) as BlockId[]).filter(
+          (k) => (nextBlocksInventory[k] || 0) > 0
+        );
+        while (remaining > 0 && availableIds.length > 0) {
+          const randIdx = Math.floor(Math.random() * availableIds.length);
+          const bId = availableIds[randIdx];
+          if ((nextBlocksInventory[bId] || 0) > 0) {
+            nextBlocksInventory[bId] -= 1;
+            deductedBlocksMap[bId] = (deductedBlocksMap[bId] || 0) + 1;
+            actualBlocksDeducted += 1;
+            remaining -= 1;
+            if (nextBlocksInventory[bId] <= 0) {
+              availableIds.splice(randIdx, 1);
+            }
+          } else {
+            availableIds.splice(randIdx, 1);
+          }
+        }
+      } else {
+        const currentHas = nextBlocksInventory[deductBlockTarget] || 0;
+        const take = Math.min(currentHas, reqBlockCount);
+        if (take > 0) {
+          nextBlocksInventory[deductBlockTarget] = currentHas - take;
+          deductedBlocksMap[deductBlockTarget] = take;
+          actualBlocksDeducted = take;
+        }
+      }
+    }
+
+    const newNotice: ParentNotice = {
+      id: `notice_${Date.now()}`,
+      type: 'penalty',
+      reason: cleanReason,
+      deductEmeralds: actualEmeraldsDeducted,
+      deductBlocks: deductedBlocksMap,
+      totalBlocksDeducted: actualBlocksDeducted,
+      timestamp: new Date().toLocaleString('zh-CN', { hour12: false }),
+      acknowledged: false,
+    };
+
+    const existingNotices = state.parentNotices || [];
+    sound.playWarning();
+    onUpdateState({
+      emeralds: Math.max(0, state.emeralds - actualEmeraldsDeducted),
+      blocksInventory: nextBlocksInventory,
+      parentNotices: [newNotice, ...existingNotices.slice(0, 19)],
+    });
+
+    showToast(
+      `📢 已扣除（💎-${actualEmeraldsDeducted}，🧱-${actualBlocksDeducted}）并向孩子的 iPad 发送习惯提醒弹窗！`
+    );
   };
 
   const totalBlocks = Object.values(state.blocksInventory).reduce((a, b) => a + b, 0);
@@ -471,6 +562,187 @@ export const ParentModal: React.FC<ParentModalProps> = ({
                     })}
                   </div>
                 </div>
+
+                {/* Habit Reminder & Deduction (Emeralds / Blocks) Section */}
+                <form
+                  onSubmit={handleSendPenaltyNotice}
+                  className="p-3.5 sm:p-4 rounded-2xl bg-gradient-to-br from-rose-950/85 via-zinc-900 to-orange-950/80 border-2 border-rose-500/50 space-y-3.5"
+                >
+                  <div>
+                    <div className="text-sm font-black text-rose-200 flex items-center gap-1.5">
+                      <AlertTriangle className="w-4 h-4 text-amber-300 shrink-0" />
+                      <span>⚠️ 习惯提醒与扣除（扣除绿宝石/砖块并弹窗语音告知原因）</span>
+                    </div>
+                    <p className="text-xs text-rose-300/80 mt-0.5">
+                      点击发送后，孩子的 iPad 会立即弹出习惯提醒信并朗读原因，需点击“我知道啦，我一定会改正”才能关闭。
+                    </p>
+                  </div>
+
+                  {/* Quick Preset Reason Chips */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-rose-200">
+                      1. 点选常见原因（或直接在下方输入框修改）：
+                    </label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {HABIT_REASON_PRESETS.map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => {
+                            sound.playClick();
+                            setPenaltyReason(preset);
+                          }}
+                          className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border transition ${
+                            penaltyReason === preset
+                              ? 'bg-rose-500 text-white border-white shadow'
+                              : 'bg-black/50 text-rose-200 border-rose-500/30 hover:bg-rose-950'
+                          }`}
+                        >
+                          {preset}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      type="text"
+                      value={penaltyReason}
+                      onChange={(e) => setPenaltyReason(e.target.value)}
+                      placeholder="输入要告诉小朋友的具体原因，如：今天上课不认真听讲..."
+                      className="w-full px-3 py-2.5 rounded-xl bg-black border border-rose-500/40 text-sm text-white focus:border-amber-400 focus:outline-none"
+                    />
+                  </div>
+
+                  {/* Deduct Emeralds & Blocks Controls */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Deduct Emeralds */}
+                    <div className="p-3 rounded-xl bg-black/50 border border-rose-500/30 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-emerald-300">
+                          💎 扣除绿宝石（当前 {state.emeralds} 颗）
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={state.emeralds}
+                          value={deductEmeralds}
+                          onChange={(e) =>
+                            setDeductEmeralds(Math.max(0, Number(e.target.value) || 0))
+                          }
+                          className="w-16 px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-700 text-center text-sm font-black text-rose-300"
+                        />
+                      </div>
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {[0, 5, 10, 20].map((val) => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => setDeductEmeralds(val)}
+                            className={`py-1.5 rounded-lg text-xs font-black border ${
+                              deductEmeralds === val
+                                ? 'bg-rose-500 text-white border-white'
+                                : 'bg-zinc-900 text-zinc-300 border-zinc-700'
+                            }`}
+                          >
+                            {val === 0 ? '不扣(0)' : `-${val}💎`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Deduct Blocks */}
+                    <div className="p-3 rounded-xl bg-black/50 border border-rose-500/30 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-black text-amber-300">
+                          🧱 扣除砖块（当前共 {totalBlocks} 块）
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          max={totalBlocks}
+                          value={deductBlockCount}
+                          onChange={(e) =>
+                            setDeductBlockCount(Math.max(0, Number(e.target.value) || 0))
+                          }
+                          className="w-16 px-2 py-1 rounded-lg bg-zinc-900 border border-zinc-700 text-center text-sm font-black text-rose-300"
+                        />
+                      </div>
+
+                      <select
+                        value={deductBlockTarget}
+                        onChange={(e) =>
+                          setDeductBlockTarget(e.target.value as 'random' | BlockId)
+                        }
+                        className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-zinc-700 text-xs text-white"
+                      >
+                        <option value="random">🎲 从背包现有砖块中随机扣除</option>
+                        {(Object.keys(BLOCK_CATALOG) as BlockId[]).map((bId) => {
+                          const count = state.blocksInventory[bId] || 0;
+                          if (count <= 0) return null;
+                          return (
+                            <option key={bId} value={bId}>
+                              指定扣除：{BLOCK_CATALOG[bId].name} (现有 {count} 块)
+                            </option>
+                          );
+                        })}
+                      </select>
+
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {[0, 5, 10, 20].map((val) => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => setDeductBlockCount(val)}
+                            className={`py-1.5 rounded-lg text-xs font-black border ${
+                              deductBlockCount === val
+                                ? 'bg-rose-500 text-white border-white'
+                                : 'bg-zinc-900 text-zinc-300 border-zinc-700'
+                            }`}
+                          >
+                            {val === 0 ? '不扣(0)' : `-${val}块`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-3 rounded-xl bg-gradient-to-r from-rose-600 to-orange-600 hover:brightness-110 active:scale-[0.99] text-white font-black text-xs sm:text-sm border border-black shadow-mc flex items-center justify-center gap-2"
+                  >
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>📢 立即扣除并向孩子 iPad 发送语音提醒弹窗</span>
+                  </button>
+
+                  {/* Recent Habit Notices Status */}
+                  {state.parentNotices && state.parentNotices.length > 0 && (
+                    <div className="pt-2 border-t border-rose-500/30 space-y-1.5">
+                      <div className="text-[11px] font-bold text-rose-300">
+                        最近发送的提醒记录：
+                      </div>
+                      {state.parentNotices.slice(0, 3).map((n) => (
+                        <div
+                          key={n.id}
+                          className="p-2 rounded-lg bg-black/40 border border-zinc-800 flex items-center justify-between gap-2 text-xs"
+                        >
+                          <div className="min-w-0 truncate">
+                            <span className="font-bold text-amber-200">“{n.reason}”</span>
+                            <span className="text-zinc-400 ml-1.5">
+                              (💎-{n.deductEmeralds} · 🧱-{n.totalBlocksDeducted})
+                            </span>
+                          </div>
+                          <span
+                            className={`px-2 py-0.5 rounded text-[11px] font-bold shrink-0 ${
+                              n.acknowledged
+                                ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40'
+                                : 'bg-amber-950 text-amber-300 border border-amber-500/40'
+                            }`}
+                          >
+                            {n.acknowledged ? '✅ 孩子已读确认' : '⏳ 待孩子查看'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </form>
 
                 {/* Current Tasks List */}
                 <div className="space-y-2">
