@@ -213,12 +213,12 @@ export const ParentModal: React.FC<ParentModalProps> = ({
     onUpdateState({
       blocksInventory: {
         ...state.blocksInventory,
-        pony_twilight: (state.blocksInventory.pony_twilight || 0) + 5,
-        pony_rainbow: (state.blocksInventory.pony_rainbow || 0) + 5,
-        pony_pinkie: (state.blocksInventory.pony_pinkie || 0) + 5,
+        pony_twilight: (state.blocksInventory.pony_twilight || 0) + 1,
+        pony_rainbow: (state.blocksInventory.pony_rainbow || 0) + 1,
+        pony_pinkie: (state.blocksInventory.pony_pinkie || 0) + 1,
       },
     });
-    showToast('🦄✨ 已发放【小马宝莉发光砖全套大礼包】（紫悦+5、云宝+5、碧琪+5）！');
+    showToast('🦄✨ 已发放【小马宝莉发光砖全套礼包】（紫悦+1、云宝+1、碧琪+1）！');
   };
 
   const handleResetWorldPlayTime = () => {
@@ -518,7 +518,7 @@ export const ParentModal: React.FC<ParentModalProps> = ({
                       onClick={handleGrantAllPonyBlocks}
                       className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-fuchsia-400 to-amber-300 active:scale-[0.99] text-zinc-950 font-black text-xs border border-black shadow-mc shrink-0"
                     >
-                      🎁 全套3款各发 +5 块
+                      🎁 全套3款各发 +1 块
                     </button>
                   </div>
 
@@ -544,17 +544,17 @@ export const ParentModal: React.FC<ParentModalProps> = ({
                           <div className="flex items-center gap-1.5 shrink-0">
                             <button
                               type="button"
-                              onClick={() => handleGrantSpecialBlock(bId, 3)}
+                              onClick={() => handleGrantSpecialBlock(bId, 1)}
                               className="px-3 py-2 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-500 active:scale-95 text-white font-black text-xs"
                             >
-                              +3块
+                              +1块
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleGrantSpecialBlock(bId, 10)}
+                              onClick={() => handleGrantSpecialBlock(bId, 3)}
                               className="px-3 py-2 rounded-lg bg-amber-400 hover:bg-amber-300 active:scale-95 text-zinc-950 font-black text-xs"
                             >
-                              +10块
+                              +3块
                             </button>
                           </div>
                         </div>
