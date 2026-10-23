@@ -6,6 +6,7 @@ import { BlockCubeIcon } from './PixelVisuals';
 import { sound } from '../utils/sound';
 import { generateSampleHomeworkImage } from '../utils/demoPhoto';
 import { compressHomeworkImage } from '../utils/imageCompress';
+import { formatLocalTimestamp } from '../utils/time';
 
 interface QuestBoardProps {
   state: PlayerState;
@@ -306,7 +307,7 @@ export const QuestBoard: React.FC<QuestBoardProps> = ({
                     {sub.aiReview.villageChiefComment}
                   </p>
                   <span className="text-[10px] text-emerald-300 font-bold">
-                    💎 +{sub.aiReview.rewards.emeralds} · {sub.timestamp}
+                    💎 +{sub.aiReview.rewards.emeralds} · {formatLocalTimestamp(sub.id, sub.timestamp)}
                   </span>
                 </div>
               </div>

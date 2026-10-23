@@ -17,6 +17,7 @@ import { RewardChestModal } from './components/RewardChestModal';
 import { ParentModal } from './components/ParentModal';
 import { ParentNoticeModal } from './components/ParentNoticeModal';
 import { sound } from './utils/sound';
+import { getBrowserLocalDateString, getBrowserTimeZone } from './utils/time';
 
 type NavTab = 'quests' | 'world' | 'pets' | 'shop';
 
@@ -28,7 +29,7 @@ const FALLBACK_INITIAL_STATE: PlayerState = {
   emeralds: 25,
   sportsEnergy: 40,
   streakDays: 1,
-  lastActiveDate: new Date().toISOString().slice(0, 10),
+  lastActiveDate: getBrowserLocalDateString(),
   blocksInventory: {
     grass: 8,
     dirt: 6,
@@ -82,7 +83,7 @@ const FALLBACK_INITIAL_STATE: PlayerState = {
   worldTheme: 'plains',
   worldSizeLevel: 1,
   worldPlaySecondsToday: 0,
-  worldPlayDate: new Date().toISOString().slice(0, 10),
+  worldPlayDate: getBrowserLocalDateString(),
   submissions: [],
   wishes: [
     { id: 'wish_mc_time', title: '周末玩30分钟《我的世界》', priceEmeralds: 60, emoji: '🎮', redeemedCount: 0 },
@@ -117,7 +118,8 @@ export const App: React.FC = () => {
 
   const fetchStateFromServer = useCallback(async (isBackgroundPoll = false) => {
     try {
-      const r = await fetch('/api/state');
+      const tz = encodeURIComponent(getBrowserTimeZone());
+      const r = await fetch(`/api/state?tz=${tz}`);
       if (!r.ok) return;
       const data = await r.json();
       if (isBackgroundPoll && Date.now() - lastLocalMutationRef.current < 3500) {
@@ -214,7 +216,11 @@ export const App: React.FC = () => {
     const res = await fetch('/api/homework/submit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        ...payload,
+        clientTimeZone: getBrowserTimeZone(),
+        clientTimestamp: new Date().toLocaleString('zh-CN', { hour12: false }),
+      }),
     });
     const data = await res.json();
     if (data?.state) {

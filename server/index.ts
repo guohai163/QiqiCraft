@@ -18,6 +18,30 @@ import { DEFAULT_HOMEWORK_TASKS } from '../src/data/catalog';
 import { synthesizeEdgeTTS } from './edgeTts';
 
 dotenv.config();
+if (!process.env.TZ) {
+  process.env.TZ = 'Asia/Shanghai';
+}
+
+function getLocalDateString(tz?: string): string {
+  const effectiveTz = tz || process.env.TZ || 'Asia/Shanghai';
+  try {
+    return new Intl.DateTimeFormat('sv-SE', { timeZone: effectiveTz }).format(new Date());
+  } catch {
+    return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai' }).format(new Date());
+  }
+}
+
+function formatServerTimestamp(tz?: string, clientTimestamp?: string): string {
+  if (clientTimestamp && typeof clientTimestamp === 'string' && clientTimestamp.trim()) {
+    return clientTimestamp.trim();
+  }
+  const effectiveTz = tz || process.env.TZ || 'Asia/Shanghai';
+  try {
+    return new Date().toLocaleString('zh-CN', { timeZone: effectiveTz, hour12: false });
+  } catch {
+    return new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false });
+  }
+}
 
 const app = express();
 const PORT = Number(process.env.PORT || 3001);
@@ -116,8 +140,8 @@ function saveSettings(settings: ServerSettings) {
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
 }
 
-function getInitialPlayerState(): PlayerState {
-  const today = new Date().toISOString().slice(0, 10);
+function getInitialPlayerState(tz?: string): PlayerState {
+  const today = getLocalDateString(tz);
   const settings = loadSettings();
   return {
     childName: settings.childName,
@@ -193,15 +217,15 @@ function getInitialPlayerState(): PlayerState {
   };
 }
 
-function loadState(): PlayerState {
+function loadState(tz?: string): PlayerState {
   const settings = loadSettings();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDateString(tz);
   const effectiveName = settings.childName || process.env.CHILD_NAME || '小矿工淇淇';
   const effectiveGender = settings.childGender || process.env.CHILD_GENDER || 'boy';
   try {
     if (fs.existsSync(STATE_FILE)) {
       const raw = JSON.parse(fs.readFileSync(STATE_FILE, 'utf-8'));
-      const initial = getInitialPlayerState();
+      const initial = getInitialPlayerState(tz);
       const state: PlayerState = {
         ...initial,
         ...raw,
@@ -229,7 +253,7 @@ function loadState(): PlayerState {
   } catch (e) {
     console.error('Failed to load state:', e);
   }
-  const initial = getInitialPlayerState();
+  const initial = getInitialPlayerState(tz);
   if (effectiveName) {
     initial.childName = effectiveName;
   }
@@ -250,9 +274,10 @@ function maskKey(key: string): string {
 }
 
 // GET /api/state
-app.get('/api/state', (_req, res) => {
+app.get('/api/state', (req, res) => {
+  const tz = typeof req.query.tz === 'string' ? req.query.tz : undefined;
   const settings = loadSettings();
-  const state = loadState();
+  const state = loadState(tz);
   let stateUpdated = false;
   if (settings.childName && state.childName !== settings.childName) {
     state.childName = settings.childName;
@@ -427,15 +452,25 @@ function buildSmartFallbackReview(
 // POST /api/homework/submit
 app.post('/api/homework/submit', async (req, res) => {
   try {
-    const { taskId, imageBase64, studentNote, sportsScore, isDemoSample } = req.body as {
+    const {
+      taskId,
+      imageBase64,
+      studentNote,
+      sportsScore,
+      isDemoSample,
+      clientTimeZone,
+      clientTimestamp,
+    } = req.body as {
       taskId: string;
       imageBase64?: string;
       studentNote?: string;
       sportsScore?: number;
       isDemoSample?: boolean;
+      clientTimeZone?: string;
+      clientTimestamp?: string;
     };
 
-    const state = loadState();
+    const state = loadState(clientTimeZone);
     const settings = loadSettings();
     const task = state.tasks.find((t) => t.id === taskId) || state.tasks[0];
 
@@ -588,7 +623,7 @@ app.post('/api/homework/submit', async (req, res) => {
         taskId: task.id,
         taskTitle: task.title,
         subject: task.subject,
-        timestamp: new Date().toLocaleString('zh-CN', { hour12: false }),
+        timestamp: formatServerTimestamp(clientTimeZone, clientTimestamp),
         imageUrl: savedImageUrl,
         sportsScore,
         studentNote,
@@ -675,7 +710,7 @@ app.post('/api/homework/submit', async (req, res) => {
       taskId: task.id,
       taskTitle: task.title,
       subject: task.subject,
-      timestamp: new Date().toLocaleString('zh-CN', { hour12: false }),
+      timestamp: formatServerTimestamp(clientTimeZone, clientTimestamp),
       imageUrl: savedImageUrl,
       sportsScore,
       studentNote,

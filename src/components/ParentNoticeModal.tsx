@@ -4,6 +4,7 @@ import { BlockId, ParentNotice } from '../types/game';
 import { BLOCK_CATALOG } from '../data/catalog';
 import { BlockCubeIcon } from './PixelVisuals';
 import { sound } from '../utils/sound';
+import { formatLocalTimestamp } from '../utils/time';
 
 interface ParentNoticeModalProps {
   childName: string;
@@ -65,7 +66,7 @@ export const ParentNoticeModal: React.FC<ParentNoticeModalProps> = ({
             </div>
           </div>
           <span className="text-xs font-bold bg-black/35 px-2.5 py-1 rounded-lg text-amber-100">
-            {notice.timestamp}
+            {formatLocalTimestamp(notice.id, notice.timestamp)}
           </span>
         </div>
 

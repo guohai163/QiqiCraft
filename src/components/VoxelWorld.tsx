@@ -20,6 +20,7 @@ import { BlockId, PetId, PlacedBlock, PlayerState, WorldExpansionTier } from '..
 import { BLOCK_CATALOG, BLUEPRINTS, PET_META, WORLD_EXPANSION_TIERS } from '../data/catalog';
 import { BlockCubeIcon } from './PixelVisuals';
 import { sound } from '../utils/sound';
+import { getBrowserLocalDateString } from '../utils/time';
 import { buildHero, buildPet, makeNameTag, VoxelCharacterParts } from './voxelCharacters';
 
 // A hero / pet walking around inside the 3D world
@@ -309,8 +310,8 @@ export const VoxelWorld: React.FC<VoxelWorldProps> = ({
   const [activeBlueprintId, setActiveBlueprintId] = useState<string>('');
   const [expandModalOpen, setExpandModalOpen] = useState<boolean>(false);
 
-  // Daily play time tracking in seconds
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // Daily play time tracking in seconds (using browser's local date)
+  const todayStr = getBrowserLocalDateString();
   const [playedSeconds, setPlayedSeconds] = useState<number>(() =>
     state.worldPlayDate === todayStr ? state.worldPlaySecondsToday || 0 : 0
   );

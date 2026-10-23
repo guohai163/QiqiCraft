@@ -14,6 +14,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3001
+ENV TZ=Asia/Shanghai
 
 COPY package*.json ./
 RUN npm ci --omit=dev

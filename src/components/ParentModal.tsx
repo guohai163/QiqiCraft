@@ -18,6 +18,7 @@ import { AppSettings, BlockId, HomeworkTask, ParentNotice, PlayerState, SubjectT
 import { BLOCK_CATALOG, SUBJECT_META } from '../data/catalog';
 import { BlockCubeIcon } from './PixelVisuals';
 import { sound } from '../utils/sound';
+import { formatLocalTimestamp, getBrowserLocalDateString } from '../utils/time';
 
 const HABIT_REASON_PRESETS = [
   '上课不认真听讲，走神做小动作',
@@ -225,7 +226,7 @@ export const ParentModal: React.FC<ParentModalProps> = ({
     sound.playClick();
     onUpdateState({
       worldPlaySecondsToday: 0,
-      worldPlayDate: new Date().toISOString().slice(0, 10),
+      worldPlayDate: getBrowserLocalDateString(),
     });
     showToast('⏳ 已将今日《我的世界》已玩时长清零！');
   };
@@ -890,7 +891,7 @@ export const ParentModal: React.FC<ParentModalProps> = ({
                             {sub.taskTitle}
                           </span>
                           <span className="text-[11px] text-zinc-400 shrink-0">
-                            {sub.timestamp}
+                            {formatLocalTimestamp(sub.id, sub.timestamp)}
                           </span>
                         </div>
                         {sub.studentNote && (
